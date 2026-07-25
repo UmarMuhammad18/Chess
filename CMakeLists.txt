@@ -23,7 +23,7 @@ target_link_libraries(chess_engine ${SDL2_LIBRARIES} ${OPENGL_LIBRARIES} GLEW::G
 # Copy assets to build dir
 add_custom_command(TARGET chess_engine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:chess_engine /assets
+    ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:chess_engine>/assets
 )
 
 # GoogleTest

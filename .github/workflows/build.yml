@@ -37,8 +37,8 @@ jobs:
 
       - name: Install dependencies via vcpkg
         run: |
-          vcpkg install sdl2:x64-windows glew:x64-windows
-          vcpkg integrate install
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg" install sdl2:x64-windows glew:x64-windows
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg" integrate install
 
       - name: Configure CMake
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"

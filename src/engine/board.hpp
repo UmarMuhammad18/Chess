@@ -5,7 +5,11 @@
 #include <vector>
 
 namespace engine {
-    // Captures the reversible state modified by make_move
+/*
+ * Represents the reversible state saved before a move is made.
+ * Includes castling rights, en‑passant square, half‑move clock,
+ * captured piece information and the Zobrist hash key.
+ */
     struct State {
         int      castling_rights;
         Square   en_passant_sq;
@@ -14,7 +18,11 @@ namespace engine {
         U64      hash_key;
     };
 
-    class Board {
+/*
+ * Board class encapsulates the chess board state, piece bitboards,
+ * side to move, castling rights, etc. Provides methods to load FEN,
+ * make/unmake moves, and query piece locations.
+ */
     public:
         Board();
         void init();
