@@ -1,5 +1,6 @@
 #include "search.hpp"
 #include "eval.hpp"
+#include "utils.hpp"
 #include <iostream>
 #include <algorithm>
 
@@ -48,7 +49,18 @@ namespace engine {
         
         std::vector<Move> moves = MoveGen::generate_legal_moves(board);
         if (moves.empty()) {
-            return -20000 + (4 - depth); // Prefer faster checkmates
+            Color us = board.get_side_to_move();
+            Color them = (us == Color::WHITE) ? Color::BLACK : Color::WHITE;
+            U64 king_bb = board.get_pieces(Piece::KING, us);
+            bool in_check = false;
+            if (king_bb) {
+                Square king_sq = static_cast<Square>(lsb(king_bb));
+                in_check = MoveGen::is_square_attacked(board, king_sq, them);
+            }
+            if (in_check) {
+                return -20000 - depth; // checkmate; larger remaining depth = faster mate
+            }
+            return 0; // stalemate
         }
         
         // Move Ordering

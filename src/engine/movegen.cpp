@@ -99,8 +99,8 @@ namespace engine {
         U64 their  = board.get_pieces(them);
         U64 pawns  = board.get_pieces(Piece::PAWN, us);
 
-        U64 rank7  = (us == Color::WHITE) ? 0x00FF000000000000ULL : 0x000000000000FF00ULL; // 7th rank
-        U64 rank2  = (us == Color::WHITE) ? 0x000000000000FF00ULL : 0x00FF000000000000ULL; // 2nd rank (start)
+        // Destination rank of a promoting push: 8th for White, 1st for Black
+        U64 promo_rank = (us == Color::WHITE) ? 0xFF00000000000000ULL : 0x00000000000000FFULL;
 
         // Single pushes
         U64 push1 = (us == Color::WHITE) ? (pawns << 8) & ~occ : (pawns >> 8) & ~occ;
@@ -109,14 +109,14 @@ namespace engine {
                                          : ((push1 & (0x0000FF0000000000ULL)) >> 8) & ~occ;
 
         // Non-promotion pushes
-        U64 push1_np = push1 & ~(rank7);
+        U64 push1_np = push1 & ~promo_rank;
         while (push1_np) {
             int to_sq = pop_lsb(push1_np);
             int from_sq = (us == Color::WHITE) ? to_sq - 8 : to_sq + 8;
             moves.push_back(Move(static_cast<Square>(from_sq), static_cast<Square>(to_sq), MoveFlag::Quiet));
         }
         // Promotions via push
-        U64 push1_promo = push1 & rank7;
+        U64 push1_promo = push1 & promo_rank;
         while (push1_promo) {
             int to_sq = pop_lsb(push1_promo);
             int from_sq = (us == Color::WHITE) ? to_sq - 8 : to_sq + 8;
@@ -189,17 +189,17 @@ namespace engine {
         } else {
             if ((rights & BK) &&
                 !(occ & ((1ULL << static_cast<int>(Square::F8)) | (1ULL << static_cast<int>(Square::G8)))) &&
-                !is_square_attacked(board, Square::E8, us) &&
-                !is_square_attacked(board, Square::F8, us) &&
-                !is_square_attacked(board, Square::G8, us))
+                !is_square_attacked(board, Square::E8, them) &&
+                !is_square_attacked(board, Square::F8, them) &&
+                !is_square_attacked(board, Square::G8, them))
             {
                 moves.push_back(Move(Square::E8, Square::G8, MoveFlag::KingCastle));
             }
             if ((rights & BQ) &&
                 !(occ & ((1ULL<<static_cast<int>(Square::B8))|(1ULL<<static_cast<int>(Square::C8))|(1ULL<<static_cast<int>(Square::D8)))) &&
-                !is_square_attacked(board, Square::E8, us) &&
-                !is_square_attacked(board, Square::D8, us) &&
-                !is_square_attacked(board, Square::C8, us))
+                !is_square_attacked(board, Square::E8, them) &&
+                !is_square_attacked(board, Square::D8, them) &&
+                !is_square_attacked(board, Square::C8, them))
             {
                 moves.push_back(Move(Square::E8, Square::C8, MoveFlag::QueenCastle));
             }

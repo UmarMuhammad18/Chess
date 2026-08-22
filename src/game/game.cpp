@@ -1,9 +1,25 @@
 #include "../engine/zobrist.hpp"
 #include "game.hpp"
 #include "../engine/movegen.hpp"
+#include "../engine/utils.hpp"
 #include <iostream>
 
 namespace game {
+    namespace {
+        engine::Move find_legal_move(engine::Board& board, engine::Square from, engine::Square to) {
+            engine::Move best{};
+            bool found = false;
+            for (const auto& m : engine::MoveGen::generate_legal_moves(board)) {
+                if (m.get_from() != from || m.get_to() != to) continue;
+                if (!found || m.promo_piece() == engine::Piece::QUEEN) {
+                    best = m;
+                    found = true;
+                }
+            }
+            return best;
+        }
+    }
+
     bool Game::init() {
         if (!app.init()) return false;
         if (!renderer.init()) return false;
@@ -31,18 +47,29 @@ namespace game {
                     int mx, my;
                     app.get_input().get_mouse_pos(mx, my);
                     
-                    // Convert screen to board (Assume 800x800, 100px squares)
+                    // SDL (0,0) is top-left; OpenGL draws rank 1 at the bottom
                     int file = mx / 100;
-                    int rank = my / 100; // Need to invert Y if rendering (0,0) is top-left, but OpenGL viewport handles Y from bottom.
-                    // For scaffolding let's assume direct map:
-                    engine::Square clicked = static_cast<engine::Square>(rank * 8 + file);
-                    
-                    if (selected_sq == engine::Square::NONE) {
-                        selected_sq = clicked;
-                    } else {
-                        // Make move (Simplified: bypass legal check for scaffold)
-                        board.make_move(engine::Move(selected_sq, clicked));
-                        selected_sq = engine::Square::NONE;
+                    int rank = 7 - (my / 100);
+                    if (file >= 0 && file < 8 && rank >= 0 && rank < 8) {
+                        engine::Square clicked = static_cast<engine::Square>(rank * 8 + file);
+                        
+                        if (selected_sq == engine::Square::NONE) {
+                            if (board.color_on(clicked) == board.get_side_to_move()) {
+                                selected_sq = clicked;
+                            }
+                        } else if (clicked == selected_sq) {
+                            selected_sq = engine::Square::NONE;
+                        } else {
+                            engine::Move legal = find_legal_move(board, selected_sq, clicked);
+                            if (legal.data != 0) {
+                                board.make_move(legal);
+                                selected_sq = engine::Square::NONE;
+                            } else if (board.color_on(clicked) == board.get_side_to_move()) {
+                                selected_sq = clicked;
+                            } else {
+                                selected_sq = engine::Square::NONE;
+                            }
+                        }
                     }
                 }
             }
