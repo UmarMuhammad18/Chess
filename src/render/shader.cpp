@@ -16,8 +16,7 @@ namespace render {
         if (!success) {
             char infoLog[512];
             glGetShaderInfoLog(id, 512, nullptr, infoLog);
-            std::cerr << "ERROR::SHADER::COMPILATION_FAILED
-" << infoLog << std::endl;
+            std::cerr << "ERROR::SHADER::COMPILATION_FAILED\n" << infoLog << std::endl;
             return false;
         }
         return true;
@@ -49,8 +48,7 @@ namespace render {
         if (!success) {
             char infoLog[512];
             glGetProgramInfoLog(program_id, 512, nullptr, infoLog);
-            std::cerr << "ERROR::SHADER::PROGRAM::LINKING_FAILED
-" << infoLog << std::endl;
+            std::cerr << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
         }
 
         glDeleteShader(vertex);
