@@ -1,5 +1,6 @@
 #include "board.hpp"
 #include "zobrist.hpp"
+#include <cctype>
 #include <iostream>
 #include <sstream>
 
@@ -51,12 +52,12 @@ namespace engine {
         int rank = 7, file = 0;
         for (char c : board_part) {
             if (c == '/') { rank--; file = 0; }
-            else if (isdigit(c)) { file += (c - '0'); }
+            else if (isdigit(static_cast<unsigned char>(c))) { file += (c - '0'); }
             else {
                 Square sq = static_cast<Square>(rank * 8 + file);
-                Color col = isupper(c) ? Color::WHITE : Color::BLACK;
+                Color col = isupper(static_cast<unsigned char>(c)) ? Color::WHITE : Color::BLACK;
                 Piece p;
-                switch (tolower(c)) {
+                switch (tolower(static_cast<unsigned char>(c))) {
                     case 'p': p = Piece::PAWN; break;
                     case 'n': p = Piece::KNIGHT; break;
                     case 'b': p = Piece::BISHOP; break;
@@ -74,11 +75,13 @@ namespace engine {
         if (side_to_move == Color::BLACK) hash_key ^= Zobrist::side_key;
 
         if (castling != "-") {
-            if (castling.find('K') != std::string::npos) { castling_rights |= WK; hash_key ^= Zobrist::castling_keys[WK]; }
-            if (castling.find('Q') != std::string::npos) { castling_rights |= WQ; hash_key ^= Zobrist::castling_keys[WQ]; }
-            if (castling.find('k') != std::string::npos) { castling_rights |= BK; hash_key ^= Zobrist::castling_keys[BK]; }
-            if (castling.find('q') != std::string::npos) { castling_rights |= BQ; hash_key ^= Zobrist::castling_keys[BQ]; }
+            if (castling.find('K') != std::string::npos) castling_rights |= WK;
+            if (castling.find('Q') != std::string::npos) castling_rights |= WQ;
+            if (castling.find('k') != std::string::npos) castling_rights |= BK;
+            if (castling.find('q') != std::string::npos) castling_rights |= BQ;
         }
+        // XOR the combined 0–15 rights index so FEN hashes match make_move updates
+        hash_key ^= Zobrist::castling_keys[castling_rights];
 
         if (en_passant != "-") {
             int f = en_passant[0] - 'a';
@@ -115,8 +118,8 @@ namespace engine {
             hash_key ^= Zobrist::enpassant_keys[static_cast<int>(en_passant_sq)];
         en_passant_sq = Square::NONE;
 
-        // Handle captures
-        if (flag == MoveFlag::Capture) {
+        // Handle captures, including promotion captures (EP is a special case below)
+        if (move.is_capture() && flag != MoveFlag::EnPassant) {
             Piece captured = piece_on(to);
             history.back().captured_piece = captured;
             remove_piece_at(captured, them, to);
@@ -203,8 +206,8 @@ namespace engine {
         remove_piece_at(moving, us, to);
         set_piece_at(moving, us, from);
 
-        // Restore captured piece
-        if (flag == MoveFlag::Capture && s.captured_piece != Piece::NONE) {
+        // Restore captured piece (including promotion captures)
+        if (move.is_capture() && flag != MoveFlag::EnPassant && s.captured_piece != Piece::NONE) {
             set_piece_at(s.captured_piece, them, to);
         }
 

@@ -18,11 +18,12 @@ namespace engine {
         U64      hash_key;
     };
 
-/*
- * Board class encapsulates the chess board state, piece bitboards,
- * side to move, castling rights, etc. Provides methods to load FEN,
- * make/unmake moves, and query piece locations.
- */
+    /*
+     * Board class encapsulates the chess board state, piece bitboards,
+     * side to move, castling rights, etc. Provides methods to load FEN,
+     * make/unmake moves, and query piece locations.
+     */
+    class Board {
     public:
         Board();
         void init();
