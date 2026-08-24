@@ -7,18 +7,30 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
+find_package(Threads REQUIRED)
 
 include_directories(${SDL2_INCLUDE_DIRS} ${OPENGL_INCLUDE_DIRS} ${GLEW_INCLUDE_DIRS} src)
 
-file(GLOB_RECURSE SRC_FILES 
-    "src/engine/*.cpp"
-    "src/platform/*.cpp"
-    "src/render/*.cpp"
-    "src/game/*.cpp"
+set(ENGINE_SRC
+    src/engine/bitboard.cpp
+    src/engine/board.cpp
+    src/engine/eval.cpp
+    src/engine/movegen.cpp
+    src/engine/notation.cpp
+    src/engine/search.cpp
+    src/engine/transposition.cpp
+    src/engine/zobrist.cpp
 )
 
-add_executable(chess_engine src/main.cpp ${SRC_FILES})
-target_link_libraries(chess_engine ${SDL2_LIBRARIES} ${OPENGL_LIBRARIES} GLEW::GLEW)
+file(GLOB PLATFORM_SRC src/platform/*.cpp)
+file(GLOB RENDER_SRC src/render/*.cpp)
+file(GLOB GAME_SRC src/game/*.cpp)
+
+add_executable(chess_engine src/main.cpp ${ENGINE_SRC} ${PLATFORM_SRC} ${RENDER_SRC} ${GAME_SRC})
+target_link_libraries(chess_engine ${SDL2_LIBRARIES} ${OPENGL_LIBRARIES} GLEW::GLEW Threads::Threads)
+
+add_executable(chess_uci src/uci/uci.cpp ${ENGINE_SRC})
+target_link_libraries(chess_uci Threads::Threads)
 
 # Copy assets to build dir
 add_custom_command(TARGET chess_engine POST_BUILD
@@ -35,6 +47,6 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(googletest)
 
 enable_testing()
-add_executable(engine_test test/engine_test.cpp src/engine/board.cpp src/engine/bitboard.cpp src/engine/movegen.cpp src/engine/search.cpp src/engine/eval.cpp src/engine/zobrist.cpp src/engine/transposition.cpp)
-target_link_libraries(engine_test GTest::gtest_main)
+add_executable(engine_test test/engine_test.cpp ${ENGINE_SRC})
+target_link_libraries(engine_test GTest::gtest_main Threads::Threads)
 add_test(NAME EngineTests COMMAND engine_test)

@@ -306,4 +306,30 @@ namespace engine {
 
         return legal;
     }
+
+    bool MoveGen::in_check(const Board& board) {
+        Color us = board.get_side_to_move();
+        U64 king_bb = board.get_pieces(Piece::KING, us);
+        if (!king_bb) return false;
+        Square king_sq = static_cast<Square>(lsb(king_bb));
+        return is_square_attacked(board, king_sq, opposite(us));
+    }
+
+    std::vector<Move> MoveGen::generate_legal_noisy(Board& board) {
+        std::vector<Move> pseudo = generate_pseudo_legal_moves(board);
+        std::vector<Move> legal;
+        Color us = board.get_side_to_move();
+        Color them = opposite(us);
+        for (const Move& m : pseudo) {
+            if (!m.is_capture() && !m.is_promotion()) continue;
+            board.make_move(m);
+            U64 king_bb = board.get_pieces(Piece::KING, us);
+            if (king_bb) {
+                Square king_sq = static_cast<Square>(lsb(king_bb));
+                if (!is_square_attacked(board, king_sq, them)) legal.push_back(m);
+            }
+            board.unmake_move(m);
+        }
+        return legal;
+    }
 }

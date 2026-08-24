@@ -1,5 +1,6 @@
 #include "board.hpp"
 #include "zobrist.hpp"
+#include "utils.hpp"
 #include <cctype>
 #include <iostream>
 #include <sstream>
@@ -17,6 +18,7 @@ namespace engine {
         full_move_number = 1;
         hash_key = 0;
         history.clear();
+        position_hashes.clear();
     }
 
     void Board::set_piece_at(Piece p, Color c, Square sq) {
@@ -92,6 +94,8 @@ namespace engine {
 
         if (!half_move.empty()) half_move_clock = std::stoi(half_move);
         if (!full_move.empty()) full_move_number = std::stoi(full_move);
+        position_hashes.clear();
+        position_hashes.push_back(hash_key);
         return true;
     }
 
@@ -177,6 +181,7 @@ namespace engine {
         half_move_clock++;
         if (moving == Piece::PAWN || move.is_capture()) half_move_clock = 0;
         if (us == Color::BLACK) full_move_number++;
+        position_hashes.push_back(hash_key);
     }
 
     void Board::unmake_move(const Move& move) {
@@ -235,6 +240,7 @@ namespace engine {
 
         if (us == Color::BLACK) full_move_number--;
         history.pop_back();
+        if (!position_hashes.empty()) position_hashes.pop_back();
     }
 
     void Board::print() const {
@@ -261,5 +267,41 @@ namespace engine {
         std::cout << "Side: " << (side_to_move == Color::WHITE ? "White" : "Black")
                   << "  Castling: " << castling_rights
                   << "  EP: " << (en_passant_sq != Square::NONE ? static_cast<int>(en_passant_sq) : -1) << "\n";
+    }
+
+    int Board::repetition_count() const {
+        if (position_hashes.empty()) return 0;
+        int reps = 0;
+        int start = static_cast<int>(position_hashes.size()) - 1 - half_move_clock;
+        if (start < 0) start = 0;
+        for (int i = start; i < static_cast<int>(position_hashes.size()); i++) {
+            if (position_hashes[i] == hash_key) reps++;
+        }
+        return reps;
+    }
+
+    bool Board::is_insufficient_material() const {
+        int total = popcount(get_occupancy());
+        if (total == 2) return true; // K vs K
+        if (total == 3) {
+            if (get_pieces(Piece::KNIGHT) || get_pieces(Piece::BISHOP)) return true;
+        }
+        if (total == 4) {
+            U64 bishops = get_pieces(Piece::BISHOP);
+            if (popcount(bishops) == 2 && !get_pieces(Piece::KNIGHT) &&
+                !get_pieces(Piece::PAWN) && !get_pieces(Piece::ROOK) &&
+                !get_pieces(Piece::QUEEN)) {
+                // K+B vs K+B — treat as draw only if same square color
+                int a = lsb(bishops);
+                int b = lsb(bishops & (bishops - 1));
+                if (((a % 8 + a / 8) % 2) == ((b % 8 + b / 8) % 2)) return true;
+            }
+            if (popcount(get_pieces(Piece::KNIGHT)) == 2 &&
+                !get_pieces(Piece::BISHOP) && !get_pieces(Piece::PAWN) &&
+                !get_pieces(Piece::ROOK) && !get_pieces(Piece::QUEEN)) {
+                return false; // K+NN vs K can mate
+            }
+        }
+        return false;
     }
 }

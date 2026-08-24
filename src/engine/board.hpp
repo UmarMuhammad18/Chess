@@ -41,6 +41,16 @@ namespace engine {
         int   get_castling_rights() const { return castling_rights; }
         Square get_en_passant_sq() const { return en_passant_sq; }
         U64   get_occupancy() const { return color_bbs[0] | color_bbs[1]; }
+        int   get_half_move_clock() const { return half_move_clock; }
+        int   get_full_move_number() const { return full_move_number; }
+        int   ply_count() const { return static_cast<int>(history.size()); }
+
+        int  repetition_count() const;
+        bool is_fifty_move_draw() const { return half_move_clock >= 100; }
+        bool is_insufficient_material() const;
+        bool is_draw() const {
+            return is_fifty_move_draw() || repetition_count() >= 3 || is_insufficient_material();
+        }
 
         // Internal helpers (used by movegen and tests)
         void set_piece_at(Piece p, Color c, Square sq);
@@ -63,5 +73,6 @@ namespace engine {
         int    full_move_number;
 
         std::vector<State> history;
+        std::vector<U64> position_hashes;
     };
 }
