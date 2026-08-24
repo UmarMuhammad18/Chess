@@ -59,4 +59,12 @@ namespace render {
     void Shader::use() {
         glUseProgram(program_id);
     }
+
+    void Shader::set_vec4(const char* name, float x, float y, float z, float w) {
+        glUniform4f(glGetUniformLocation(program_id, name), x, y, z, w);
+    }
+
+    void Shader::set_float(const char* name, float v) {
+        glUniform1f(glGetUniformLocation(program_id, name), v);
+    }
 }

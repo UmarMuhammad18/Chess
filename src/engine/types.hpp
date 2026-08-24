@@ -7,6 +7,22 @@ namespace engine {
     enum class Color { WHITE, BLACK, BOTH };
     enum class Piece { PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, NONE };
 
+    inline Color opposite(Color c) {
+        return c == Color::WHITE ? Color::BLACK : Color::WHITE;
+    }
+
+    enum class GameResult {
+        Ongoing,
+        WhiteMates,
+        BlackMates,
+        Stalemate,
+        DrawFifty,
+        DrawRepetition,
+        DrawMaterial,
+        WhiteResigns,
+        BlackResigns
+    };
+
     enum class Square : int {
         A1, B1, C1, D1, E1, F1, G1, H1,
         A2, B2, C2, D2, E2, F2, G2, H2,

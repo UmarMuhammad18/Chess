@@ -7,8 +7,10 @@ namespace engine {
     public:
         static void init();
         static bool is_square_attacked(const Board& board, Square sq, Color by_color);
+        static bool in_check(const Board& board);
         static std::vector<Move> generate_pseudo_legal_moves(const Board& board);
         static std::vector<Move> generate_legal_moves(Board& board);
+        static std::vector<Move> generate_legal_noisy(Board& board);
     private:
         static U64 knight_attacks[64];
         static U64 king_attacks[64];
