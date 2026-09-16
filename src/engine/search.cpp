@@ -3,10 +3,9 @@
 #include "utils.hpp"
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 
 namespace engine {
-    static constexpr int MATE = 30000;
-    static constexpr int INF = 32000;
 
     bool Search::time_up() {
         if (stop.load()) return true;
@@ -20,55 +19,89 @@ namespace engine {
         return stop.load();
     }
 
-    int Search::score_move(const Board& board, const Move& move, Move tt_move) {
-        if (move.data == tt_move.data) return 20000;
+    void Search::clear_killers() {
+        for (auto& ply : killers) {
+            ply[0] = Move{};
+            ply[1] = Move{};
+        }
+    }
 
-        Piece victim = Piece::NONE;
-        Color them = opposite(board.get_side_to_move());
-        for (int i = 0; i < 6; i++) {
-            if (get_bit(board.get_pieces(static_cast<Piece>(i), them), move.get_to())) {
-                victim = static_cast<Piece>(i);
-                break;
+    void Search::clear_history() {
+        for (auto& c : history)
+            for (auto& f : c)
+                f.fill(0);
+    }
+
+    int Search::score_move(const Board& board, const Move& move, Move tt_move, int ply) {
+        if (move.data == tt_move.data) return 1000000;
+
+        if (move.is_capture() || move.is_promotion()) {
+            Piece victim = Piece::NONE;
+            Color them = opposite(board.get_side_to_move());
+            for (int i = 0; i < 6; i++) {
+                if (get_bit(board.get_pieces(static_cast<Piece>(i), them), move.get_to())) {
+                    victim = static_cast<Piece>(i);
+                    break;
+                }
             }
-        }
-        if (move.get_flag() == MoveFlag::EnPassant) victim = Piece::PAWN;
+            if (move.get_flag() == MoveFlag::EnPassant) victim = Piece::PAWN;
 
-        if (victim != Piece::NONE || move.is_promotion()) {
             Piece attacker = board.piece_on(move.get_from());
-            int v_score = (static_cast<int>(victim) + 1) * 100;
-            int a_score = static_cast<int>(attacker) + 1;
-            int promo = move.is_promotion() ? 800 : 0;
-            return 10000 + v_score - a_score + promo;
+            int v = (victim == Piece::NONE) ? 0 : (static_cast<int>(victim) + 1) * 100;
+            int a = static_cast<int>(attacker) + 1;
+            int promo = move.is_promotion() ? 900 : 0;
+            return 500000 + v - a + promo;
         }
-        return 0;
+
+        if (ply < MAX_PLY) {
+            if (move.data == killers[ply][0].data) return 400000;
+            if (move.data == killers[ply][1].data) return 350000;
+        }
+
+        Color us = board.get_side_to_move();
+        int from = static_cast<int>(move.get_from());
+        int to   = static_cast<int>(move.get_to());
+        return history[static_cast<int>(us)][from][to];
     }
 
     int Search::quiesce(Board& board, int alpha, int beta, int ply) {
         nodes++;
-        if (ply > 12 || time_up()) return Evaluator::evaluate(board);
+        if (ply > 24 || time_up()) return Evaluator::evaluate(board);
 
         if (board.is_fifty_move_draw() || board.repetition_count() >= 2)
             return 0;
 
-        bool chk = MoveGen::in_check(board);
-        if (!chk) {
-            int stand = Evaluator::evaluate(board);
-            if (stand >= beta) return stand;
-            if (stand > alpha) alpha = stand;
+        bool in_chk = MoveGen::in_check(board);
+        int stand_pat = Evaluator::evaluate(board);
+
+        if (!in_chk) {
+            if (stand_pat >= beta) return stand_pat;
+            if (stand_pat > alpha) alpha = stand_pat;
         }
 
-        std::vector<Move> moves = chk ? MoveGen::generate_legal_moves(board)
-                                      : MoveGen::generate_legal_noisy(board);
-        if (chk && moves.empty()) return -MATE + ply;
+        std::vector<Move> moves = in_chk ? MoveGen::generate_legal_moves(board)
+                                         : MoveGen::generate_legal_noisy(board);
+        if (in_chk && moves.empty()) return -MATE + ply;
 
         std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b) {
-            return score_move(board, a, Move{}) > score_move(board, b, Move{});
+            return score_move(board, a, Move{}, ply) > score_move(board, b, Move{}, ply);
         });
 
         for (const Move& move : moves) {
+            if (!in_chk && move.is_capture() && !move.is_promotion()) {
+                Piece victim = board.piece_on(move.get_to());
+                Piece attacker = board.piece_on(move.get_from());
+                if (victim != Piece::NONE &&
+                    static_cast<int>(attacker) > static_cast<int>(victim) &&
+                    stand_pat + 100 < alpha) {
+                    continue;
+                }
+            }
+
             board.make_move(move);
             int score = -quiesce(board, -beta, -alpha, ply + 1);
             board.unmake_move(move);
+
             if (time_up()) return alpha;
             if (score >= beta) return score;
             if (score > alpha) alpha = score;
@@ -76,41 +109,88 @@ namespace engine {
         return alpha;
     }
 
-    int Search::negamax(Board& board, int depth, int alpha, int beta, int ply) {
+    int Search::negamax(Board& board, int depth, int alpha, int beta, int ply, bool do_null) {
         nodes++;
         if (time_up()) return alpha;
 
         if (ply > 0 && (board.is_fifty_move_draw() || board.repetition_count() >= 2))
             return 0;
 
+        int mate_val = MATE - ply;
+        if (alpha >= mate_val) return alpha;
+        if (beta <= -mate_val) return beta;
+
         int orig_alpha = alpha;
         Move tt_move{};
-        int tt_score;
+        int tt_score = 0;
+
         if (ply > 0 && tt.probe(board.hash_key, depth, alpha, beta, tt_score, tt_move)) {
             return tt_score;
         }
+
+        bool in_chk = MoveGen::in_check(board);
+        if (in_chk) depth++;
 
         if (depth <= 0) {
             return quiesce(board, alpha, beta, ply);
         }
 
+        // Null-move pruning
+        if (do_null && !in_chk && depth >= 3 && ply > 0) {
+            int non_pawn = popcount(board.get_pieces(Color::WHITE) | board.get_pieces(Color::BLACK))
+                         - popcount(board.get_pieces(Piece::PAWN));
+            if (non_pawn > 2) {
+                board.make_null_move();
+                int R = (depth > 6) ? 3 : 2;
+                int score = -negamax(board, depth - 1 - R, -beta, -beta + 1, ply + 1, false);
+                board.unmake_null_move();
+                if (time_up()) return alpha;
+                if (score >= beta) return beta;
+            }
+        }
+
         std::vector<Move> moves = MoveGen::generate_legal_moves(board);
         if (moves.empty()) {
-            if (MoveGen::in_check(board)) return -MATE + ply;
+            if (in_chk) return -MATE + ply;
             return 0;
         }
 
         std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b) {
-            return score_move(board, a, tt_move) > score_move(board, b, tt_move);
+            return score_move(board, a, tt_move, ply) > score_move(board, b, tt_move, ply);
         });
 
         int max_val = -INF;
         Move best_move = moves[0];
+        int moves_searched = 0;
 
         for (const Move& move : moves) {
+            bool is_quiet = !move.is_capture() && !move.is_promotion() && !in_chk;
+
             board.make_move(move);
-            int score = -negamax(board, depth - 1, -beta, -alpha, ply + 1);
+
+            int new_depth = depth - 1;
+            int score;
+
+            if (moves_searched >= 3 && depth >= 3 && is_quiet) {
+                int reduction = (moves_searched >= 6) ? 2 : 1;
+                score = -negamax(board, new_depth - reduction, -alpha - 1, -alpha, ply + 1, true);
+                if (score > alpha) {
+                    score = -negamax(board, new_depth, -beta, -alpha, ply + 1, true);
+                }
+            } else {
+                if (moves_searched == 0) {
+                    score = -negamax(board, new_depth, -beta, -alpha, ply + 1, true);
+                } else {
+                    score = -negamax(board, new_depth, -alpha - 1, -alpha, ply + 1, true);
+                    if (score > alpha && score < beta) {
+                        score = -negamax(board, new_depth, -beta, -alpha, ply + 1, true);
+                    }
+                }
+            }
+
             board.unmake_move(move);
+            moves_searched++;
+
             if (time_up()) return max_val;
 
             if (score > max_val) {
@@ -118,7 +198,22 @@ namespace engine {
                 best_move = move;
             }
             if (max_val > alpha) alpha = max_val;
-            if (alpha >= beta) break;
+
+            if (alpha >= beta) {
+                if (is_quiet && ply < MAX_PLY) {
+                    if (killers[ply][0].data != move.data) {
+                        killers[ply][1] = killers[ply][0];
+                        killers[ply][0] = move;
+                    }
+                    Color us = board.get_side_to_move();
+                    int from = static_cast<int>(move.get_from());
+                    int to   = static_cast<int>(move.get_to());
+                    history[static_cast<int>(us)][from][to] += depth * depth;
+                    if (history[static_cast<int>(us)][from][to] > 100000)
+                        history[static_cast<int>(us)][from][to] = 100000;
+                }
+                break;
+            }
         }
 
         HashFlag flag = HashFlag::EXACT;
@@ -132,6 +227,7 @@ namespace engine {
         SearchResult result;
         clear_stop();
         nodes = 0;
+        clear_killers();
 
         int max_depth = std::max(1, std::min(limits.max_depth, 64));
         timed = limits.use_clock;
@@ -139,7 +235,7 @@ namespace engine {
             int think_ms = limits.movetime_ms;
             if (think_ms <= 0) {
                 int remain = (board.get_side_to_move() == Color::WHITE) ? limits.wtime_ms : limits.btime_ms;
-                int inc = (board.get_side_to_move() == Color::WHITE) ? limits.winc_ms : limits.binc_ms;
+                int inc    = (board.get_side_to_move() == Color::WHITE) ? limits.winc_ms  : limits.binc_ms;
                 if (remain > 0) think_ms = remain / 30 + inc / 2;
                 else think_ms = 1000;
             }
@@ -159,33 +255,55 @@ namespace engine {
         tt.probe(board.hash_key, 0, -INF, INF, dummy, tt_hint);
 
         for (int depth = 1; depth <= max_depth; depth++) {
+            int alpha = -INF;
+            int beta  =  INF;
+            if (depth >= 5) {
+                alpha = result.score - 50;
+                beta  = result.score + 50;
+            }
+
             std::sort(root_moves.begin(), root_moves.end(), [&](const Move& a, const Move& b) {
                 if (a.data == result.best.data) return true;
                 if (b.data == result.best.data) return false;
-                return score_move(board, a, tt_hint) > score_move(board, b, tt_hint);
+                return score_move(board, a, tt_hint, 0) > score_move(board, b, tt_hint, 0);
             });
 
             int best_score = -INF;
             Move best_move = root_moves[0];
             bool completed = true;
+            bool re_search = true;
 
-            for (const Move& move : root_moves) {
-                board.make_move(move);
-                int score = -negamax(board, depth - 1, -INF, INF, 1);
-                board.unmake_move(move);
-                if (time_up() && depth > 1) {
-                    completed = false;
-                    break;
+            while (re_search) {
+                re_search = false;
+                best_score = -INF;
+
+                for (const Move& move : root_moves) {
+                    board.make_move(move);
+                    int score = -negamax(board, depth - 1, -beta, -alpha, 1, true);
+                    board.unmake_move(move);
+
+                    if (time_up() && depth > 1) {
+                        completed = false;
+                        break;
+                    }
+                    if (score > best_score) {
+                        best_score = score;
+                        best_move = move;
+                    }
                 }
-                if (score > best_score) {
-                    best_score = score;
-                    best_move = move;
+
+                if (!completed) break;
+
+                if (best_score <= alpha || best_score >= beta) {
+                    alpha = -INF;
+                    beta  =  INF;
+                    re_search = true;
                 }
             }
 
             if (!completed) break;
 
-            result.best = best_move;
+            result.best  = best_move;
             result.score = best_score;
             result.depth = depth;
             result.nodes = nodes;

@@ -33,6 +33,9 @@ namespace engine {
         void make_move(const Move& move);
         void unmake_move(const Move& move);
 
+        void make_null_move();
+        void unmake_null_move();
+
         // Accessors
         U64   get_pieces(Piece p) const { return piece_bbs[static_cast<int>(p)]; }
         U64   get_pieces(Color c) const { return color_bbs[static_cast<int>(c)]; }

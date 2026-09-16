@@ -82,7 +82,6 @@ namespace engine {
             if (castling.find('k') != std::string::npos) castling_rights |= BK;
             if (castling.find('q') != std::string::npos) castling_rights |= BQ;
         }
-        // XOR the combined 0–15 rights index so FEN hashes match make_move updates
         hash_key ^= Zobrist::castling_keys[castling_rights];
 
         if (en_passant != "-") {
@@ -100,7 +99,6 @@ namespace engine {
     }
 
     void Board::make_move(const Move& move) {
-        // Push current state onto history so we can fully restore it
         State s;
         s.castling_rights = castling_rights;
         s.en_passant_sq   = en_passant_sq;
@@ -117,36 +115,30 @@ namespace engine {
         Color us   = side_to_move;
         Color them = (us == Color::WHITE) ? Color::BLACK : Color::WHITE;
 
-        // Clear old en passant hash
         if (en_passant_sq != Square::NONE)
             hash_key ^= Zobrist::enpassant_keys[static_cast<int>(en_passant_sq)];
         en_passant_sq = Square::NONE;
 
-        // Handle captures, including promotion captures (EP is a special case below)
         if (move.is_capture() && flag != MoveFlag::EnPassant) {
             Piece captured = piece_on(to);
             history.back().captured_piece = captured;
             remove_piece_at(captured, them, to);
         }
 
-        // Handle En Passant capture (captured pawn is NOT on 'to')
         if (flag == MoveFlag::EnPassant) {
             int ep_pawn_sq = (us == Color::WHITE) ? static_cast<int>(to) - 8 : static_cast<int>(to) + 8;
             remove_piece_at(Piece::PAWN, them, static_cast<Square>(ep_pawn_sq));
             history.back().captured_piece = Piece::PAWN;
         }
 
-        // Move the piece
         remove_piece_at(moving, us, from);
         set_piece_at(moving, us, to);
 
-        // Handle Promotions: replace Pawn with promo piece
         if (move.is_promotion()) {
             remove_piece_at(Piece::PAWN, us, to);
             set_piece_at(move.promo_piece(), us, to);
         }
 
-        // Handle Castling: move the Rook
         if (flag == MoveFlag::KingCastle) {
             if (us == Color::WHITE) { remove_piece_at(Piece::ROOK, us, Square::H1); set_piece_at(Piece::ROOK, us, Square::F1); }
             else                    { remove_piece_at(Piece::ROOK, us, Square::H8); set_piece_at(Piece::ROOK, us, Square::F8); }
@@ -156,7 +148,6 @@ namespace engine {
             else                    { remove_piece_at(Piece::ROOK, us, Square::A8); set_piece_at(Piece::ROOK, us, Square::D8); }
         }
 
-        // Update castling rights if King or Rook moved
         hash_key ^= Zobrist::castling_keys[castling_rights];
         if (moving == Piece::KING) {
             if (us == Color::WHITE) castling_rights &= ~(WK | WQ);
@@ -168,13 +159,11 @@ namespace engine {
         if (from == Square::H8 || to == Square::H8) castling_rights &= ~BK;
         hash_key ^= Zobrist::castling_keys[castling_rights];
 
-        // Set new en passant square for double pawn pushes
         if (flag == MoveFlag::DoublePawnPush) {
             en_passant_sq = static_cast<Square>((static_cast<int>(from) + static_cast<int>(to)) / 2);
             hash_key ^= Zobrist::enpassant_keys[static_cast<int>(en_passant_sq)];
         }
 
-        // Flip side to move
         side_to_move = them;
         hash_key ^= Zobrist::side_key;
 
@@ -193,36 +182,30 @@ namespace engine {
         Square to    = move.get_to();
         MoveFlag flag = move.get_flag();
 
-        // Flip side BACK
         Color us   = (side_to_move == Color::WHITE) ? Color::BLACK : Color::WHITE;
         Color them = side_to_move;
         side_to_move = us;
 
         Piece moving = piece_on(to);
 
-        // Reverse promotion: swap promo piece back to pawn
         if (move.is_promotion()) {
             remove_piece_at(move.promo_piece(), us, to);
             set_piece_at(Piece::PAWN, us, to);
             moving = Piece::PAWN;
         }
 
-        // Move piece back
         remove_piece_at(moving, us, to);
         set_piece_at(moving, us, from);
 
-        // Restore captured piece (including promotion captures)
         if (move.is_capture() && flag != MoveFlag::EnPassant && s.captured_piece != Piece::NONE) {
             set_piece_at(s.captured_piece, them, to);
         }
 
-        // Restore en passant captured pawn
         if (flag == MoveFlag::EnPassant) {
             int ep_pawn_sq = (us == Color::WHITE) ? static_cast<int>(to) - 8 : static_cast<int>(to) + 8;
             set_piece_at(Piece::PAWN, them, static_cast<Square>(ep_pawn_sq));
         }
 
-        // Restore castling rook
         if (flag == MoveFlag::KingCastle) {
             if (us == Color::WHITE) { remove_piece_at(Piece::ROOK, us, Square::F1); set_piece_at(Piece::ROOK, us, Square::H1); }
             else                    { remove_piece_at(Piece::ROOK, us, Square::F8); set_piece_at(Piece::ROOK, us, Square::H8); }
@@ -232,7 +215,6 @@ namespace engine {
             else                    { remove_piece_at(Piece::ROOK, us, Square::D8); set_piece_at(Piece::ROOK, us, Square::A8); }
         }
 
-        // Restore previous state
         hash_key       = s.hash_key;
         castling_rights = s.castling_rights;
         en_passant_sq  = s.en_passant_sq;
@@ -282,7 +264,7 @@ namespace engine {
 
     bool Board::is_insufficient_material() const {
         int total = popcount(get_occupancy());
-        if (total == 2) return true; // K vs K
+        if (total == 2) return true;
         if (total == 3) {
             if (get_pieces(Piece::KNIGHT) || get_pieces(Piece::BISHOP)) return true;
         }
@@ -291,7 +273,6 @@ namespace engine {
             if (popcount(bishops) == 2 && !get_pieces(Piece::KNIGHT) &&
                 !get_pieces(Piece::PAWN) && !get_pieces(Piece::ROOK) &&
                 !get_pieces(Piece::QUEEN)) {
-                // K+B vs K+B — treat as draw only if same square color
                 int a = lsb(bishops);
                 int b = lsb(bishops & (bishops - 1));
                 if (((a % 8 + a / 8) % 2) == ((b % 8 + b / 8) % 2)) return true;
@@ -299,9 +280,43 @@ namespace engine {
             if (popcount(get_pieces(Piece::KNIGHT)) == 2 &&
                 !get_pieces(Piece::BISHOP) && !get_pieces(Piece::PAWN) &&
                 !get_pieces(Piece::ROOK) && !get_pieces(Piece::QUEEN)) {
-                return false; // K+NN vs K can mate
+                return false;
             }
         }
         return false;
+    }
+
+    void Board::make_null_move() {
+        State s;
+        s.castling_rights = castling_rights;
+        s.en_passant_sq   = en_passant_sq;
+        s.half_move_clock = half_move_clock;
+        s.captured_piece  = Piece::NONE;
+        s.hash_key        = hash_key;
+        history.push_back(s);
+
+        if (en_passant_sq != Square::NONE)
+            hash_key ^= Zobrist::enpassant_keys[static_cast<int>(en_passant_sq)];
+        en_passant_sq = Square::NONE;
+
+        side_to_move = opposite(side_to_move);
+        hash_key ^= Zobrist::side_key;
+
+        half_move_clock++;
+        position_hashes.push_back(hash_key);
+    }
+
+    void Board::unmake_null_move() {
+        if (history.empty()) return;
+        State& s = history.back();
+
+        side_to_move = opposite(side_to_move);
+        hash_key        = s.hash_key;
+        castling_rights = s.castling_rights;
+        en_passant_sq   = s.en_passant_sq;
+        half_move_clock = s.half_move_clock;
+
+        history.pop_back();
+        if (!position_hashes.empty()) position_hashes.pop_back();
     }
 }

@@ -50,13 +50,13 @@ src/
 | `types.hpp` | `U64`, `Square`, `Piece`, `Color`, 16-bit `Move`, `GameResult` |
 | `utils.hpp` | `popcount`, `lsb`, `pop_lsb` via C++20 `<bit>` |
 | `bitboard.hpp` | Inline `set_bit`, `clear_bit`, `get_bit` |
-| `board.hpp/cpp` | FEN, make/unmake, history, repetition / 50-move / material draws |
+| `board.hpp/cpp` | FEN, make/unmake, null-move, history, repetition / 50-move / material draws |
 | `movegen.hpp/cpp` | Leaper tables, classical rays, legal (and noisy) generation |
-| `eval.hpp/cpp` | Material + piece-square tables, midgame/endgame king |
-| `search.hpp/cpp` | Iterative deepening, alpha-beta, quiescence, time management |
+| `eval.hpp/cpp` | Material + PSTs + bishop pair, mobility, pawn structure, open files |
+| `search.hpp/cpp` | ID, PVS, null-move, LMR, killers, history, aspiration, quiescence |
 | `notation.hpp/cpp` | UCI / SAN, check/mate suffixes, game-result strings |
 | `zobrist.hpp/cpp` | Incremental 64-bit hashing |
-| `transposition.hpp/cpp` | 16MB TT with Exact / Alpha / Beta bounds |
+| `transposition.hpp/cpp` | 32MB TT with Exact / Alpha / Beta bounds |
 
 ### GUI
 | File | Responsibility |
@@ -73,14 +73,15 @@ src/
 - **FEN** — load any position
 - **Legal movegen** — pawns (push, double, capture, EP, promo ×4), leapers, sliders, castling
 - **Make / unmake** — full reversible state, including hash and repetition list
+- **Null-move** — reversible null-move support on the board for pruning
 - **Draw detection** — threefold repetition, 50-move rule, insufficient material
-- **Zobrist + TT** — incremental hash, 16MB transposition table
-- **Search** — negamax alpha-beta, MVV-LVA + TT move ordering, iterative deepening
-- **Quiescence** — captures and promotions; full legal moves while in check
-- **Evaluation** — material (N=320, B=330) plus PSTs; king uses midgame vs endgame tables
+- **Zobrist + TT** — incremental hash, 32MB transposition table
+- **Search** — iterative deepening, PVS, null-move pruning, LMR, check extensions, killers, history heuristic, aspiration windows
+- **Quiescence** — captures/promotions with basic SEE-style filtering; full legal moves in check
+- **Evaluation** — material + PSTs, bishop pair, mobility proxy, doubled/isolated/passed pawns, rook on open/semi-open files
 - **Time management** — `movetime`, or `wtime/btime/winc/binc` (remaining/30 + increment/2)
 - **Notation** — UCI (`e2e4`, `e7e8q`) and SAN (`Nf3`, `O-O`, `a8=Q#`)
-- **UCI** — `uci`, `isready`, `ucinewgame`, `position startpos\|fen … moves …`, `go depth\|movetime\|wtime/btime/winc/binc\|infinite`, `stop`, `quit`
+- **UCI** — `uci`, `isready`, `ucinewgame`, `position startpos|fen … moves …`, `go depth|movetime|wtime/btime/winc/binc|infinite`, `stop`, `quit`
 
 ---
 
@@ -188,10 +189,12 @@ Chess/
 - [x] Quiescence search
 - [x] Piece-square tables
 - [x] UCI protocol (`chess_uci`)
+- [x] Null-move pruning / late-move reductions / killers / history
+- [x] Stronger evaluation (bishop pair, pawn structure, open files)
 - [ ] Magic bitboards (O(1) slider attacks)
-- [ ] Null-move pruning / late-move reductions
-- [ ] Principal-variation search and a longer PV from the TT
+- [ ] Principal-variation extraction from the TT (longer PV)
 - [ ] Under-promotion picker in the GUI
+- [ ] Analysis mode + PGN load/save
 - [ ] Android / GLES build via the NDK
 
 ---
