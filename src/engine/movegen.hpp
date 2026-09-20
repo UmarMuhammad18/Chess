@@ -16,10 +16,24 @@ namespace engine {
         static U64 king_attacks[64];
         static U64 pawn_attacks[2][64];
 
-        // Classical ray attack (retained as reference, can be replaced with Magics)
         static U64 get_ray_attacks(Square sq, U64 occupancy, int dir_index);
         static U64 rook_attacks_otf(Square sq, U64 occ);
         static U64 bishop_attacks_otf(Square sq, U64 occ);
+
+        static U64 rook_magic[64];
+        static U64 bishop_magic[64];
+        static int  rook_shift[64];
+        static int  bishop_shift[64];
+        static U64  rook_mask[64];
+        static U64  bishop_mask[64];
+        static U64* rook_attacks_table[64];
+        static U64* bishop_attacks_table[64];
+        static std::vector<U64> rook_table_storage;
+        static std::vector<U64> bishop_table_storage;
+
+        static U64 rook_attacks(Square sq, U64 occ);
+        static U64 bishop_attacks(Square sq, U64 occ);
+        static void init_magics();
 
         static void gen_pawn_moves(const Board& board, std::vector<Move>& moves, Color us);
         static void gen_castling_moves(const Board& board, std::vector<Move>& moves, Color us);
