@@ -28,6 +28,8 @@ namespace game {
         void handle_board_click(int mx, int my);
         void handle_input();
         void draw();
+        void export_pgn();
+        void start_analysis();
         bool button(int x, int y, int w, int h, const char* label, bool active,
                     int mx, int my, bool clicked);
 
@@ -43,6 +45,10 @@ namespace game {
         std::vector<engine::Move> move_stack;
         std::vector<std::string> san_list;
         int think_ms{1000};
+        bool analysis_mode{false};
+        bool promo_pending{false};
+        engine::Square promo_from{engine::Square::NONE};
+        engine::Square promo_to{engine::Square::NONE};
 
         std::thread ai_thread;
         std::atomic<bool> ai_busy{false};
