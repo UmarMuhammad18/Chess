@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(CHESS_ANDROID "Build Android / GLES stubs (no desktop SDL GUI)" OFF)
+option(CHESS_IOS "Build iOS-oriented engine library (no desktop SDL GUI)" OFF)
 
 set(ENGINE_SRC
     src/engine/bitboard.cpp
@@ -19,12 +20,25 @@ set(ENGINE_SRC
 
 find_package(Threads REQUIRED)
 
-if(CHESS_ANDROID)
-    message(STATUS "CHESS_ANDROID=ON — building engine + UCI only (GLES stubs in tree)")
-    add_compile_definitions(CHESS_ANDROID=1)
+if(CHESS_ANDROID OR CHESS_IOS)
+    if(CHESS_ANDROID)
+        message(STATUS "CHESS_ANDROID=ON — building engine + UCI only")
+        add_compile_definitions(CHESS_ANDROID=1)
+    endif()
+    if(CHESS_IOS)
+        message(STATUS "CHESS_IOS=ON — building static engine lib for Xcode")
+        add_compile_definitions(CHESS_IOS=1)
+    endif()
+
     add_executable(chess_uci src/uci/uci.cpp ${ENGINE_SRC})
     target_include_directories(chess_uci PRIVATE src)
     target_link_libraries(chess_uci Threads::Threads)
+
+    add_library(chess_core STATIC ${ENGINE_SRC} src/bridge/chess_c_api.cpp)
+    target_include_directories(chess_core PUBLIC src src/bridge)
+    target_compile_features(chess_core PUBLIC cxx_std_20)
+    set_target_properties(chess_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 else()
     find_package(SDL2 REQUIRED)
     find_package(OpenGL REQUIRED)
@@ -48,7 +62,7 @@ else()
     )
 endif()
 
-if(NOT CHESS_ANDROID)
+if(NOT CHESS_ANDROID AND NOT CHESS_IOS)
     include(FetchContent)
     FetchContent_Declare(
       googletest
