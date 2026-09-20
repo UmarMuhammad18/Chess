@@ -22,43 +22,14 @@ Click a piece, then a highlighted square. The engine replies on a background thr
 
 | Control | Action |
 |---|---|
-| Click piece / square | Select and move (legal dots shown); under-promotion picker for Q/R/B/N |
+| Click piece / square | Select and move (legal dots shown) |
 | **New Game** or `N` | Reset the board |
 | **Undo** or `U` | Take back the last human move (and the engine reply) |
 | **Resign** or `R` | Resign the current game |
 | **White / Black** | Play as that colour (board flips when you play Black) |
 | **0.5s / 1s / 2s / 5s** | Engine think time per move |
-| **Analysis** | Toggle analysis mode (search without auto-playing) |
-| **Export PGN** | Write `game.pgn` and print PGN to stdout |
 
 The side panel shows status, search depth / score / nodes, a multi-move PV, and a SAN move list.
-
----
-
-## Architecture
-
-```
-src/
-├── engine/       Pure C++ (no OS, no SDL, no OpenGL)
-├── uci/          Universal Chess Interface front-end
-├── platform/     SDL2 windowing, input, timing
-├── render/       OpenGL 3.3 shaders, textures, bitmap UI
-└── game/         GUI: engine ↔ platform ↔ renderer
-```
-
-### Engine
-| File | Responsibility |
-|---|---|
-| `types.hpp` | `U64`, `Square`, `Piece`, `Color`, 16-bit `Move`, `GameResult` |
-| `utils.hpp` | `popcount`, `lsb`, `pop_lsb` via C++20 `<bit>` |
-| `bitboard.hpp` | Inline `set_bit`, `clear_bit`, `get_bit` |
-| `board.hpp/cpp` | FEN, make/unmake, null-move, history, draws |
-| `movegen.hpp/cpp` | Leapers, **magic bitboards** for sliders, legal/noisy gen |
-| `eval.hpp/cpp` | Material + PSTs + bishop pair, mobility, pawn structure, open files |
-| `search.hpp/cpp` | ID, PVS, null-move, LMR, killers, history, aspiration, long PV from TT |
-| `notation.hpp/cpp` | UCI / SAN / **PGN** export-import, game-result strings |
-| `zobrist.hpp/cpp` | Incremental 64-bit hashing |
-| `transposition.hpp/cpp` | 32MB TT with Exact / Alpha / Beta bounds |
 
 ---
 
@@ -66,8 +37,7 @@ src/
 
 - **Bitboards** — 12 piece/colour occupancies, 16-bit packed moves
 - **FEN** — load any position
-- **Legal movegen** — pawns, leapers, sliders, castling
-- **Magic bitboards** — O(1) rook/bishop attacks after init
+- **Legal movegen** — pawns, leapers, classical ray sliders, castling
 - **Make / unmake** — full reversible state, including hash and repetition list
 - **Null-move** — reversible null-move support for pruning
 - **Draw detection** — threefold, 50-move, insufficient material
@@ -76,7 +46,7 @@ src/
 - **Long PV** — principal variation reconstructed by walking the TT
 - **Quiescence** — captures/promotions with SEE-style filtering
 - **Evaluation** — material + PSTs, bishop pair, mobility, pawn structure, open files
-- **PGN** — export games to `game.pgn` / stdout; simple import helper
+- **PGN** — `moves_to_pgn` / `pgn_to_moves` helpers in notation
 - **Time management** — `movetime` or `wtime/btime/winc/binc`
 - **Notation** — UCI and SAN
 - **UCI** — full protocol for GUIs
@@ -85,40 +55,11 @@ src/
 
 ## Build
 
-### Prerequisites
-
-**Windows** (via [vcpkg](https://github.com/microsoft/vcpkg)):
-```powershell
-vcpkg install sdl2 glew
-```
-
-**macOS**:
-```bash
-brew install cmake sdl2 glew
-```
-
-**Linux**:
-```bash
-sudo apt install cmake libsdl2-dev libglew-dev
-```
-
-### Configure & build
-
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
-```
-
-### Run
-
-```bash
 ./build/chess_engine
 ./build/chess_uci
-```
-
-### Tests
-
-```bash
 ctest --test-dir build --output-on-failure
 ```
 
@@ -133,10 +74,11 @@ ctest --test-dir build --output-on-failure
 - [x] UCI protocol
 - [x] Null-move / LMR / killers / history
 - [x] Stronger evaluation
-- [x] Magic bitboards
 - [x] Longer PV from TT
-- [x] Under-promotion picker
-- [x] Analysis mode + PGN export
+- [x] PGN helpers in notation
+- [ ] Magic bitboards (O(1) slider attacks)
+- [ ] Under-promotion picker in the GUI
+- [ ] Analysis mode + PGN export button
 - [ ] Android / GLES build via the NDK
 
 ---
