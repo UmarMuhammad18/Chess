@@ -135,7 +135,6 @@ namespace engine {
             return quiesce(board, alpha, beta, ply);
         }
 
-        // Null-move pruning
         if (do_null && !in_chk && depth >= 3 && ply > 0) {
             int non_pawn = popcount(board.get_pieces(Color::WHITE) | board.get_pieces(Color::BLACK))
                          - popcount(board.get_pieces(Piece::PAWN));
@@ -307,8 +306,7 @@ namespace engine {
             result.score = best_score;
             result.depth = depth;
             result.nodes = nodes;
-            result.pv.clear();
-            result.pv.push_back(best_move);
+            result.pv = extract_pv(board, best_move, depth);
 
             if (std::abs(best_score) > MATE - 128) break;
             if (time_up()) break;
@@ -316,6 +314,37 @@ namespace engine {
 
         result.nodes = nodes;
         return result;
+    }
+
+    std::vector<Move> Search::extract_pv(Board& board, Move first, int max_len) {
+        std::vector<Move> pv;
+        if (first.data == 0) return pv;
+        pv.push_back(first);
+
+        std::vector<Move> played;
+        board.make_move(first);
+        played.push_back(first);
+
+        for (int i = 1; i < max_len && i < 32; i++) {
+            Move next{};
+            if (!tt.probe_move(board.hash_key, next) || next.data == 0) break;
+
+            auto legal = MoveGen::generate_legal_moves(board);
+            bool ok = false;
+            for (const auto& m : legal) {
+                if (m.data == next.data) { ok = true; break; }
+            }
+            if (!ok) break;
+
+            pv.push_back(next);
+            board.make_move(next);
+            played.push_back(next);
+        }
+
+        for (auto it = played.rbegin(); it != played.rend(); ++it)
+            board.unmake_move(*it);
+
+        return pv;
     }
 
     Move Search::search_best_move(Board& board, int depth) {

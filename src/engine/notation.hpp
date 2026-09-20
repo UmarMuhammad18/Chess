@@ -10,4 +10,9 @@ namespace engine {
     std::string move_to_san(Board& board, const Move& move);
     GameResult position_result(Board& board);
     std::string result_string(GameResult r);
+
+    std::string moves_to_pgn(const std::vector<std::string>& san_list, GameResult result,
+                             const std::string& white_name = "White",
+                             const std::string& black_name = "Black");
+    std::vector<Move> pgn_to_moves(Board& board, const std::string& pgn_text);
 }

@@ -16,7 +16,6 @@ namespace engine {
         static U64 king_attacks[64];
         static U64 pawn_attacks[2][64];
 
-        // Classical ray attack (retained as reference, can be replaced with Magics)
         static U64 get_ray_attacks(Square sq, U64 occupancy, int dir_index);
         static U64 rook_attacks_otf(Square sq, U64 occ);
         static U64 bishop_attacks_otf(Square sq, U64 occ);

@@ -20,7 +20,7 @@ namespace engine {
         void clear();
         void store(U64 key, int depth, int score, HashFlag flag, Move best_move);
         bool probe(U64 key, int depth, int alpha, int beta, int& return_score, Move& best_move);
-        
+        bool probe_move(U64 key, Move& best_move) const;
         size_t size() const { return table.size(); }
     private:
         std::vector<TTEntry> table;

@@ -16,7 +16,7 @@ namespace engine {
 
     void TranspositionTable::store(U64 key, int depth, int score, HashFlag flag, Move best_move) {
         size_t index = key % table.size();
-        // Always replace strategy for scaffolding
+        if (table[index].key == key && table[index].depth > depth) return;
         table[index].key = key;
         table[index].depth = depth;
         table[index].score = score;
@@ -27,7 +27,6 @@ namespace engine {
     bool TranspositionTable::probe(U64 key, int depth, int alpha, int beta, int& return_score, Move& best_move) {
         size_t index = key % table.size();
         TTEntry& entry = table[index];
-        
         if (entry.key == key) {
             best_move = entry.best_move;
             if (entry.depth >= depth) {
@@ -44,6 +43,16 @@ namespace engine {
                     return true;
                 }
             }
+        }
+        return false;
+    }
+
+    bool TranspositionTable::probe_move(U64 key, Move& best_move) const {
+        size_t index = key % table.size();
+        const TTEntry& entry = table[index];
+        if (entry.key == key && entry.best_move.data != 0) {
+            best_move = entry.best_move;
+            return true;
         }
         return false;
     }
