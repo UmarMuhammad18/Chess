@@ -10,19 +10,6 @@ namespace game {
     namespace {
         const char* START_FEN =
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-
-        engine::Move find_legal_move(engine::Board& board, engine::Square from, engine::Square to) {
-            engine::Move best{};
-            bool found = false;
-            for (const auto& m : engine::MoveGen::generate_legal_moves(board)) {
-                if (m.get_from() != from || m.get_to() != to) continue;
-                if (!found || m.promo_piece() == engine::Piece::QUEEN) {
-                    best = m;
-                    found = true;
-                }
-            }
-            return best;
-        }
     }
 
     Game::~Game() {
@@ -46,6 +33,7 @@ namespace game {
         move_stack.clear();
         san_list.clear();
         result = engine::GameResult::Ongoing;
+        promo_pending = false;
         search.tt.clear();
     }
 
@@ -63,6 +51,7 @@ namespace game {
         move_stack.push_back(m);
         last_move = m;
         selected_sq = engine::Square::NONE;
+        promo_pending = false;
         result = engine::position_result(board);
     }
 
@@ -70,6 +59,7 @@ namespace game {
         stop_ai();
         if (move_stack.empty()) return;
         result = engine::GameResult::Ongoing;
+        promo_pending = false;
         bool took_human = false;
         while (!move_stack.empty()) {
             engine::Color who = engine::opposite(board.get_side_to_move());
@@ -129,6 +119,39 @@ namespace game {
         }
     }
 
+    void Game::export_pgn() {
+        std::string white = (human_color == engine::Color::WHITE) ? "Human" : "Engine";
+        std::string black = (human_color == engine::Color::BLACK) ? "Human" : "Engine";
+        std::string pgn = engine::moves_to_pgn(san_list, result, white, black);
+        FILE* f = std::fopen("game.pgn", "w");
+        if (f) {
+            std::fwrite(pgn.data(), 1, pgn.size(), f);
+            std::fclose(f);
+        }
+        std::printf("\n===== PGN =====\n%s===== END =====\n", pgn.c_str());
+    }
+
+    void Game::start_analysis() {
+        if (ai_busy) return;
+        stop_ai();
+        search.clear_stop();
+        ai_busy = true;
+        ai_done = false;
+        engine::Board snap = board;
+        ai_thread = std::thread([this, snap]() mutable {
+            engine::SearchLimits lim;
+            lim.use_clock = false;
+            lim.max_depth = 12;
+            engine::SearchResult r = search.search(snap, lim);
+            {
+                std::lock_guard<std::mutex> lock(ai_mutex);
+                ai_result = r;
+            }
+            ai_done = true;
+            ai_busy = false;
+        });
+    }
+
     void Game::handle_board_click(int mx, int my) {
         if (result != engine::GameResult::Ongoing) return;
         if (board.get_side_to_move() != human_color) return;
@@ -141,12 +164,20 @@ namespace game {
         } else if (clicked == selected_sq) {
             selected_sq = engine::Square::NONE;
         } else {
-            engine::Move legal = find_legal_move(board, selected_sq, clicked);
-            if (legal.data != 0) {
-                play_move(legal);
-            } else if (board.color_on(clicked) == human_color) {
-                selected_sq = clicked;
+            std::vector<engine::Move> matches;
+            for (const auto& m : engine::MoveGen::generate_legal_moves(board)) {
+                if (m.get_from() == selected_sq && m.get_to() == clicked)
+                    matches.push_back(m);
+            }
+            if (matches.empty()) {
+                if (board.color_on(clicked) == human_color) selected_sq = clicked;
+                else selected_sq = engine::Square::NONE;
+            } else if (matches.size() == 1) {
+                play_move(matches[0]);
             } else {
+                promo_pending = true;
+                promo_from = selected_sq;
+                promo_to = clicked;
                 selected_sq = engine::Square::NONE;
             }
         }
@@ -210,6 +241,43 @@ namespace game {
                 return;
             }
         }
+        y += 40;
+        if (hit(px, y, pw, 32, mx, my)) {
+            analysis_mode = !analysis_mode;
+            if (analysis_mode) {
+                stop_ai();
+                start_analysis();
+            } else {
+                stop_ai();
+            }
+            return;
+        }
+        y += 40;
+        if (hit(px, y, pw, 32, mx, my)) {
+            export_pgn();
+            return;
+        }
+
+        if (promo_pending) {
+            const engine::Piece pieces[] = {
+                engine::Piece::QUEEN, engine::Piece::ROOK,
+                engine::Piece::BISHOP, engine::Piece::KNIGHT
+            };
+            int pw4 = (pw - 18) / 4;
+            for (int i = 0; i < 4; i++) {
+                if (hit(px + i * (pw4 + 6), 320, pw4, 36, mx, my)) {
+                    for (const auto& m : engine::MoveGen::generate_legal_moves(board)) {
+                        if (m.get_from() == promo_from && m.get_to() == promo_to &&
+                            m.promo_piece() == pieces[i]) {
+                            play_move(m);
+                            break;
+                        }
+                    }
+                    promo_pending = false;
+                    return;
+                }
+            }
+        }
 
         handle_board_click(mx, my);
     }
@@ -258,7 +326,7 @@ namespace game {
 
         int mx, my;
         app.get_input().get_mouse_pos(mx, my);
-        bool clicked = false; // already consumed in handle_input; redraw uses hover only
+        bool clicked = false;
 
         renderer.draw_rect(panel_x, 0, win_w - panel_x, win_h, 0.13f, 0.14f, 0.17f, 1);
         renderer.draw_rect(panel_x, 0, 2, win_h, 0.08f, 0.08f, 0.10f, 1);
@@ -267,7 +335,7 @@ namespace game {
         renderer.draw_text(px, 18, "C++ CHESS", 3, 0.93f, 0.84f, 0.45f);
 
         std::string status;
-        if (ai_busy) status = "AI thinking...";
+        if (ai_busy) status = analysis_mode ? "Analysing..." : "AI thinking...";
         else if (result != engine::GameResult::Ongoing) status = engine::result_string(result);
         else if (engine::MoveGen::in_check(board))
             status = board.get_side_to_move() == engine::Color::WHITE ? "White in check" : "Black in check";
@@ -278,7 +346,6 @@ namespace game {
         if (ai_busy) { sr = 0.55f; sg = 0.78f; sb = 0.95f; }
         renderer.draw_text(px, 48, status.c_str(), 2, sr, sg, sb);
 
-        // Buttons are drawn again for hover; clicks already handled
         int y = 86;
         int pw = win_w - panel_x - 32;
         button(px, y, pw, 36, "New Game", false, mx, my, clicked); y += 44;
@@ -296,6 +363,23 @@ namespace game {
         for (int i = 0; i < 4; i++)
             button(px + i * (tw + 6), y, tw, 28, labels[i], think_ms == times[i], mx, my, clicked);
 
+        y += 40;
+        button(px, y, pw, 32, analysis_mode ? "Analysis: ON" : "Analysis: OFF",
+               analysis_mode, mx, my, clicked);
+        y += 40;
+        button(px, y, pw, 32, "Export PGN", false, mx, my, clicked);
+
+        if (promo_pending) {
+            y += 40;
+            renderer.draw_text(px, y, "Promote to:", 2, 0.90f, 0.80f, 0.40f);
+            y += 20;
+            int pw4 = (pw - 18) / 4;
+            const char* plabels[] = {"Q", "R", "B", "N"};
+            for (int i = 0; i < 4; i++)
+                button(px + i * (pw4 + 6), y, pw4, 36, plabels[i], false, mx, my, clicked);
+            y += 44;
+        }
+
         y += 44;
         {
             std::lock_guard<std::mutex> lock(ai_mutex);
@@ -307,7 +391,9 @@ namespace game {
                 renderer.draw_text(px, y, buf, 2, 0.70f, 0.78f, 0.70f);
                 y += 20;
                 if (!ai_result.pv.empty()) {
-                    std::string pv = "pv " + engine::move_to_uci(ai_result.pv[0]);
+                    std::string pv = "pv";
+                    for (size_t i = 0; i < ai_result.pv.size() && i < 8; i++)
+                        pv += " " + engine::move_to_uci(ai_result.pv[i]);
                     renderer.draw_text(px, y, pv.c_str(), 2, 0.55f, 0.60f, 0.58f);
                     y += 20;
                 }
@@ -343,10 +429,17 @@ namespace game {
             panel_x = board_px;
 
             handle_input();
-            apply_ai_if_ready();
-            if (result == engine::GameResult::Ongoing &&
-                board.get_side_to_move() != human_color && !ai_busy && !ai_done) {
-                start_ai();
+            if (!analysis_mode) {
+                apply_ai_if_ready();
+                if (result == engine::GameResult::Ongoing &&
+                    board.get_side_to_move() != human_color && !ai_busy && !ai_done) {
+                    start_ai();
+                }
+            } else {
+                if (ai_done && ai_thread.joinable()) {
+                    ai_thread.join();
+                    ai_done = false;
+                }
             }
             draw();
         }
