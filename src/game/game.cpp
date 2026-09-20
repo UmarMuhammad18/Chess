@@ -12,9 +12,7 @@ namespace game {
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     }
 
-    Game::~Game() {
-        stop_ai();
-    }
+    Game::~Game() { stop_ai(); }
 
     bool Game::init() {
         if (!app.init()) return false;
@@ -96,10 +94,7 @@ namespace game {
             engine::SearchLimits lim;
             lim.movetime_ms = ms;
             engine::SearchResult r = search.search(snap, lim);
-            {
-                std::lock_guard<std::mutex> lock(ai_mutex);
-                ai_result = r;
-            }
+            { std::lock_guard<std::mutex> lock(ai_mutex); ai_result = r; }
             ai_done = true;
             ai_busy = false;
         });
@@ -110,13 +105,9 @@ namespace game {
         if (ai_thread.joinable()) ai_thread.join();
         ai_done = false;
         engine::SearchResult r;
-        {
-            std::lock_guard<std::mutex> lock(ai_mutex);
-            r = ai_result;
-        }
-        if (result == engine::GameResult::Ongoing && r.best.data != 0) {
+        { std::lock_guard<std::mutex> lock(ai_mutex); r = ai_result; }
+        if (result == engine::GameResult::Ongoing && r.best.data != 0)
             play_move(r.best);
-        }
     }
 
     void Game::export_pgn() {
@@ -124,10 +115,7 @@ namespace game {
         std::string black = (human_color == engine::Color::BLACK) ? "Human" : "Engine";
         std::string pgn = engine::moves_to_pgn(san_list, result, white, black);
         FILE* f = std::fopen("game.pgn", "w");
-        if (f) {
-            std::fwrite(pgn.data(), 1, pgn.size(), f);
-            std::fclose(f);
-        }
+        if (f) { std::fwrite(pgn.data(), 1, pgn.size(), f); std::fclose(f); }
         std::printf("\n===== PGN =====\n%s===== END =====\n", pgn.c_str());
     }
 
@@ -143,10 +131,7 @@ namespace game {
             lim.use_clock = false;
             lim.max_depth = 12;
             engine::SearchResult r = search.search(snap, lim);
-            {
-                std::lock_guard<std::mutex> lock(ai_mutex);
-                ai_result = r;
-            }
+            { std::lock_guard<std::mutex> lock(ai_mutex); ai_result = r; }
             ai_done = true;
             ai_busy = false;
         });
@@ -209,7 +194,6 @@ namespace game {
         if (in.key_new()) new_game();
         if (in.key_undo()) undo();
         if (in.key_resign()) resign();
-
         if (!clicked) return;
 
         int px = panel_x + 16;
@@ -222,41 +206,23 @@ namespace game {
         if (hit(px, y, pw, 36, mx, my)) { resign(); return; }
         y += 56;
         int hw = (pw - 8) / 2;
-        if (hit(px, y, hw, 32, mx, my)) {
-            human_color = engine::Color::WHITE;
-            new_game();
-            return;
-        }
-        if (hit(px + hw + 8, y, hw, 32, mx, my)) {
-            human_color = engine::Color::BLACK;
-            new_game();
-            return;
-        }
+        if (hit(px, y, hw, 32, mx, my)) { human_color = engine::Color::WHITE; new_game(); return; }
+        if (hit(px + hw + 8, y, hw, 32, mx, my)) { human_color = engine::Color::BLACK; new_game(); return; }
         y += 48;
         int tw = (pw - 18) / 4;
         const int times[] = {500, 1000, 2000, 5000};
         for (int i = 0; i < 4; i++) {
-            if (hit(px + i * (tw + 6), y, tw, 28, mx, my)) {
-                think_ms = times[i];
-                return;
-            }
+            if (hit(px + i * (tw + 6), y, tw, 28, mx, my)) { think_ms = times[i]; return; }
         }
         y += 40;
         if (hit(px, y, pw, 32, mx, my)) {
             analysis_mode = !analysis_mode;
-            if (analysis_mode) {
-                stop_ai();
-                start_analysis();
-            } else {
-                stop_ai();
-            }
+            if (analysis_mode) { stop_ai(); start_analysis(); }
+            else stop_ai();
             return;
         }
         y += 40;
-        if (hit(px, y, pw, 32, mx, my)) {
-            export_pgn();
-            return;
-        }
+        if (hit(px, y, pw, 32, mx, my)) { export_pgn(); return; }
 
         if (promo_pending) {
             const engine::Piece pieces[] = {
@@ -278,7 +244,6 @@ namespace game {
                 }
             }
         }
-
         handle_board_click(mx, my);
     }
 
@@ -384,10 +349,19 @@ namespace game {
         {
             std::lock_guard<std::mutex> lock(ai_mutex);
             if (ai_result.depth > 0) {
+                float t = 0.5f + static_cast<float>(ai_result.score) / 800.0f;
+                if (t < 0.f) t = 0.f;
+                if (t > 1.f) t = 1.f;
+                int bar_w = pw - 8;
+                int fill = static_cast<int>(t * bar_w);
+                renderer.draw_rect(px, y, bar_w, 10, 0.25f, 0.25f, 0.28f, 1);
+                renderer.draw_rect(px, y, fill, 10, 0.85f, 0.85f, 0.80f, 1);
+                y += 16;
+
                 char buf[96];
-                int cp = ai_result.score;
                 std::snprintf(buf, sizeof(buf), "d%d  %+d cp  %llu n",
-                              ai_result.depth, cp, static_cast<unsigned long long>(ai_result.nodes));
+                              ai_result.depth, ai_result.score,
+                              static_cast<unsigned long long>(ai_result.nodes));
                 renderer.draw_text(px, y, buf, 2, 0.70f, 0.78f, 0.70f);
                 y += 20;
                 if (!ai_result.pv.empty()) {
@@ -432,14 +406,11 @@ namespace game {
             if (!analysis_mode) {
                 apply_ai_if_ready();
                 if (result == engine::GameResult::Ongoing &&
-                    board.get_side_to_move() != human_color && !ai_busy && !ai_done) {
+                    board.get_side_to_move() != human_color && !ai_busy && !ai_done)
                     start_ai();
-                }
-            } else {
-                if (ai_done && ai_thread.joinable()) {
-                    ai_thread.join();
-                    ai_done = false;
-                }
+            } else if (ai_done && ai_thread.joinable()) {
+                ai_thread.join();
+                ai_done = false;
             }
             draw();
         }
