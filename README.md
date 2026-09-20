@@ -18,40 +18,39 @@ Built as a learning and CV project.
 
 ## Play the GUI
 
-Click a piece, then a highlighted square. The engine replies on a background thread so the window stays responsive.
-
 | Control | Action |
 |---|---|
-| Click piece / square | Select and move (legal dots); under-promotion picker Q/R/B/N |
-| **New Game** or `N` | Reset the board |
-| **Undo** or `U` | Take back the last human move (and the engine reply) |
-| **Resign** or `R` | Resign the current game |
-| **White / Black** | Play as that colour (board flips when you play Black) |
-| **0.5s / 1s / 2s / 5s** | Engine think time per move |
-| **Analysis** | Search without auto-playing moves |
-| **Export PGN** | Write `game.pgn` + print to stdout |
+| Click piece / square | Select and move; under-promotion picker Q/R/B/N |
+| **New Game** / `N` | Reset |
+| **Undo** / `U` | Take back |
+| **Resign** / `R` | Resign |
+| **White / Black** | Side to play |
+| **0.5s–5s** | Think time |
+| **Analysis** | Search without auto-play |
+| **Export PGN** | Write `game.pgn` + stdout |
 
-The side panel shows status, search depth / score / nodes, a multi-move PV, and a SAN move list.
+Eval bar + multi-move PV shown in the side panel.
 
 ---
 
 ## Engine features
 
-- **Bitboards** — 12 piece/colour occupancies, 16-bit packed moves
-- **FEN** — load any position
-- **Legal movegen** — pawns, leapers, **magic bitboard** sliders, castling
-- **Make / unmake** — full reversible state, including hash and repetition list
-- **Null-move** — reversible null-move support for pruning
-- **Draw detection** — threefold, 50-move, insufficient material
-- **Zobrist + TT** — incremental hash, 32MB transposition table
-- **Search** — iterative deepening, PVS, null-move, LMR, check extensions, killers, history, aspiration windows
-- **Long PV** — principal variation reconstructed by walking the TT
-- **Quiescence** — captures/promotions with SEE-style filtering
-- **Evaluation** — material + PSTs, bishop pair, mobility, pawn structure, open files
-- **PGN** — export/import helpers; GUI Export PGN button
-- **Time management** — `movetime` or `wtime/btime/winc/binc`
-- **Notation** — UCI and SAN
-- **UCI** — full protocol for GUIs
+- Bitboards, FEN, legal movegen with **magic bitboards**
+- Make/unmake, null-move, draws, Zobrist + 32MB TT
+- Search: ID, PVS, null-move, LMR, killers, history, aspiration, **reverse futility + futility pruning**, long PV
+- Eval: material, PSTs, bishop pair, mobility, pawn structure, open files
+- PGN helpers + UCI
+
+---
+
+## Android scaffolding
+
+```bash
+cmake -B build-android -DCHESS_ANDROID=ON
+cmake --build build-android   # chess_uci only
+```
+
+See `android/README.md` for NDK / GLES steps.
 
 ---
 
@@ -61,7 +60,6 @@ The side panel shows status, search depth / score / nodes, a multi-move PV, and 
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ./build/chess_engine
-./build/chess_uci
 ctest --test-dir build --output-on-failure
 ```
 
@@ -69,22 +67,13 @@ ctest --test-dir build --output-on-failure
 
 ## Roadmap
 
-- [x] Playable GUI
-- [x] Iterative deepening with time management
-- [x] Quiescence search
-- [x] Piece-square tables
-- [x] UCI protocol
-- [x] Null-move / LMR / killers / history
-- [x] Stronger evaluation
-- [x] Longer PV from TT
-- [x] PGN helpers in notation
-- [x] Magic bitboards (O(1) slider attacks)
-- [x] Under-promotion picker in the GUI
-- [x] Analysis mode + PGN export button
-- [ ] Android / GLES build via the NDK
+- [x] Playable GUI, UCI, search/eval upgrades, magic bitboards
+- [x] Analysis mode, under-promotion, PGN export
+- [x] Android / GLES scaffolding (CMake + docs + GL stubs)
+- [ ] Full Android NativeActivity / APK
 
 ---
 
 ## License
 
-MIT License — fork, learn from, and build on it.
+MIT License.
