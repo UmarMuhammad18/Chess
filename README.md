@@ -22,14 +22,16 @@ Click a piece, then a highlighted square. The engine replies on a background thr
 
 | Control | Action |
 |---|---|
-| Click piece / square | Select and move (legal dots shown) |
+| Click piece / square | Select and move (legal dots shown); under-promotion picker for Q/R/B/N |
 | **New Game** or `N` | Reset the board |
 | **Undo** or `U` | Take back the last human move (and the engine reply) |
 | **Resign** or `R` | Resign the current game |
 | **White / Black** | Play as that colour (board flips when you play Black) |
 | **0.5s / 1s / 2s / 5s** | Engine think time per move |
+| **Analysis** | Toggle analysis mode (search without auto-playing) |
+| **Export PGN** | Write `game.pgn` and print PGN to stdout |
 
-The side panel shows status (check, mate, draw, “AI thinking”), search depth / score / nodes, and a SAN move list. Promotions in the GUI always become a queen.
+The side panel shows status, search depth / score / nodes, a multi-move PV, and a SAN move list.
 
 ---
 
@@ -50,20 +52,13 @@ src/
 | `types.hpp` | `U64`, `Square`, `Piece`, `Color`, 16-bit `Move`, `GameResult` |
 | `utils.hpp` | `popcount`, `lsb`, `pop_lsb` via C++20 `<bit>` |
 | `bitboard.hpp` | Inline `set_bit`, `clear_bit`, `get_bit` |
-| `board.hpp/cpp` | FEN, make/unmake, null-move, history, repetition / 50-move / material draws |
-| `movegen.hpp/cpp` | Leaper tables, classical rays, legal (and noisy) generation |
+| `board.hpp/cpp` | FEN, make/unmake, null-move, history, draws |
+| `movegen.hpp/cpp` | Leapers, **magic bitboards** for sliders, legal/noisy gen |
 | `eval.hpp/cpp` | Material + PSTs + bishop pair, mobility, pawn structure, open files |
-| `search.hpp/cpp` | ID, PVS, null-move, LMR, killers, history, aspiration, quiescence |
-| `notation.hpp/cpp` | UCI / SAN, check/mate suffixes, game-result strings |
+| `search.hpp/cpp` | ID, PVS, null-move, LMR, killers, history, aspiration, long PV from TT |
+| `notation.hpp/cpp` | UCI / SAN / **PGN** export-import, game-result strings |
 | `zobrist.hpp/cpp` | Incremental 64-bit hashing |
 | `transposition.hpp/cpp` | 32MB TT with Exact / Alpha / Beta bounds |
-
-### GUI
-| File | Responsibility |
-|---|---|
-| `platform/` | SDL2 window (OpenGL 3.3 Core, MSAA 4x, VSync), mouse + keys |
-| `render/` | NDC textured quads, sprite atlas, 5×7 bitmap font, tints / dots |
-| `game/` | Selection, legal-move hints, AI worker thread, panel buttons |
 
 ---
 
@@ -71,33 +66,20 @@ src/
 
 - **Bitboards** — 12 piece/colour occupancies, 16-bit packed moves
 - **FEN** — load any position
-- **Legal movegen** — pawns (push, double, capture, EP, promo ×4), leapers, sliders, castling
+- **Legal movegen** — pawns, leapers, sliders, castling
+- **Magic bitboards** — O(1) rook/bishop attacks after init
 - **Make / unmake** — full reversible state, including hash and repetition list
-- **Null-move** — reversible null-move support on the board for pruning
-- **Draw detection** — threefold repetition, 50-move rule, insufficient material
+- **Null-move** — reversible null-move support for pruning
+- **Draw detection** — threefold, 50-move, insufficient material
 - **Zobrist + TT** — incremental hash, 32MB transposition table
-- **Search** — iterative deepening, PVS, null-move pruning, LMR, check extensions, killers, history heuristic, aspiration windows
-- **Quiescence** — captures/promotions with basic SEE-style filtering; full legal moves in check
-- **Evaluation** — material + PSTs, bishop pair, mobility proxy, doubled/isolated/passed pawns, rook on open/semi-open files
-- **Time management** — `movetime`, or `wtime/btime/winc/binc` (remaining/30 + increment/2)
-- **Notation** — UCI (`e2e4`, `e7e8q`) and SAN (`Nf3`, `O-O`, `a8=Q#`)
-- **UCI** — `uci`, `isready`, `ucinewgame`, `position startpos|fen … moves …`, `go depth|movetime|wtime/btime/winc/binc|infinite`, `stop`, `quit`
-
----
-
-## Tech stack
-
-| Layer | Technology |
-|---|---|
-| Language | C++20 |
-| Build | CMake 3.16+ |
-| Windowing | SDL2 |
-| Rendering | OpenGL 3.3 Core |
-| Extension loader | GLEW |
-| Images | stb_image (single-header) |
-| Testing | GoogleTest (FetchContent) |
-
-Desktop only for now (Linux, macOS, Windows). There is no GLES / Android build yet.
+- **Search** — iterative deepening, PVS, null-move, LMR, check extensions, killers, history, aspiration windows
+- **Long PV** — principal variation reconstructed by walking the TT
+- **Quiescence** — captures/promotions with SEE-style filtering
+- **Evaluation** — material + PSTs, bishop pair, mobility, pawn structure, open files
+- **PGN** — export games to `game.pgn` / stdout; simple import helper
+- **Time management** — `movetime` or `wtime/btime/winc/binc`
+- **Notation** — UCI and SAN
+- **UCI** — full protocol for GUIs
 
 ---
 
@@ -130,11 +112,7 @@ cmake --build build --config Release
 ### Run
 
 ```bash
-# GUI
-./build/chess_engine              # Linux / macOS
-.\build\Release\chess_engine.exe  # Windows
-
-# UCI (pipe, or point Arena / Cute Chess at this binary)
+./build/chess_engine
 ./build/chess_uci
 ```
 
@@ -144,57 +122,21 @@ cmake --build build --config Release
 ctest --test-dir build --output-on-failure
 ```
 
-Covered today:
-
-- FEN parsing and starting-position legality (20 moves)
-- Perft: startpos 1–4 (20 / 400 / 8,902 / 197,281) and Kiwipete 1–3 (48 / 2,039 / 97,862)
-- Make/unmake hash reversibility; Zobrist matches a loaded FEN after `e2e4`
-- Promotion captures, 7th-rank pushes (not promotions), black castling-through-check
-- Stalemate vs checkmate scoring; search prefers mate (`#` in SAN)
-- Piece-square tables (centre pawn, advanced pawn)
-- UCI / SAN (`e2e4`, `O-O`, `a7a8q`)
-- Threefold repetition, mate and stalemate results
-- Timed iterative-deepening search returns a legal move
-
----
-
-## Project layout
-
-```
-Chess/
-├── CMakeLists.txt
-├── README.md
-├── .github/workflows/build.yml    Linux / macOS / Windows CI
-├── assets/
-│   ├── shaders/                   OpenGL 3.3 vertex + fragment
-│   └── textures/                  Board and piece atlas
-├── src/
-│   ├── main.cpp                   GUI entry
-│   ├── uci/uci.cpp                UCI entry
-│   ├── vendor/stb_image.h
-│   ├── engine/
-│   ├── platform/
-│   ├── render/
-│   └── game/
-└── test/
-    └── engine_test.cpp
-```
-
 ---
 
 ## Roadmap
 
-- [x] Playable GUI (legal hints, undo, side to play, timed AI thread)
+- [x] Playable GUI
 - [x] Iterative deepening with time management
 - [x] Quiescence search
 - [x] Piece-square tables
-- [x] UCI protocol (`chess_uci`)
-- [x] Null-move pruning / late-move reductions / killers / history
-- [x] Stronger evaluation (bishop pair, pawn structure, open files)
-- [ ] Magic bitboards (O(1) slider attacks)
-- [ ] Principal-variation extraction from the TT (longer PV)
-- [ ] Under-promotion picker in the GUI
-- [ ] Analysis mode + PGN load/save
+- [x] UCI protocol
+- [x] Null-move / LMR / killers / history
+- [x] Stronger evaluation
+- [x] Magic bitboards
+- [x] Longer PV from TT
+- [x] Under-promotion picker
+- [x] Analysis mode + PGN export
 - [ ] Android / GLES build via the NDK
 
 ---
