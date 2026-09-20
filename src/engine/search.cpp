@@ -135,6 +135,15 @@ namespace engine {
             return quiesce(board, alpha, beta, ply);
         }
 
+        int static_eval = Evaluator::evaluate(board);
+
+        // Reverse futility: stand-pat far above beta
+        if (!in_chk && depth <= 6 && ply > 0) {
+            int margin = 80 * depth;
+            if (static_eval - margin >= beta)
+                return static_eval;
+        }
+
         if (do_null && !in_chk && depth >= 3 && ply > 0) {
             int non_pawn = popcount(board.get_pieces(Color::WHITE) | board.get_pieces(Color::BLACK))
                          - popcount(board.get_pieces(Piece::PAWN));
@@ -164,6 +173,13 @@ namespace engine {
 
         for (const Move& move : moves) {
             bool is_quiet = !move.is_capture() && !move.is_promotion() && !in_chk;
+
+            // Futility pruning: skip quiet moves when static eval + margin can't raise alpha
+            if (is_quiet && !in_chk && depth <= 5 && moves_searched > 0 && ply > 0) {
+                int margin = 100 + 80 * depth;
+                if (static_eval + margin <= alpha)
+                    continue;
+            }
 
             board.make_move(move);
 
