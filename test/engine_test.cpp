@@ -253,3 +253,60 @@ TEST_F(EngineTest, PromotionUci) {
     EXPECT_EQ(move_to_uci(m), "a7a8q");
     EXPECT_EQ(move_to_san(b, m), "a8=Q+");
 }
+
+TEST_F(EngineTest, PgnRoundTripSimple) {
+    Board b;
+    b.load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    std::vector<std::string> san;
+    auto play = [&](const char* u) {
+        Move m = move_from_uci(b, u);
+        ASSERT_NE(m.data, 0u) << u;
+        san.push_back(move_to_san(b, m));
+        b.make_move(m);
+    };
+    play("e2e4"); play("e7e5"); play("g1f3"); play("b8c6");
+
+    std::string pgn = moves_to_pgn(san, GameResult::Ongoing, "W", "B");
+    EXPECT_NE(pgn.find("e4"), std::string::npos);
+    EXPECT_NE(pgn.find("e5"), std::string::npos);
+
+    Board loaded;
+    auto applied = pgn_to_moves(loaded, pgn);
+    EXPECT_EQ(applied.size(), 4u);
+    EXPECT_EQ(loaded.hash_key, b.hash_key);
+}
+
+TEST_F(EngineTest, PerftPosition3) {
+    Board b;
+    ASSERT_TRUE(b.load_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"));
+    EXPECT_EQ(perft(b, 1), 14u);
+    EXPECT_EQ(perft(b, 2), 191u);
+    EXPECT_EQ(perft(b, 3), 2812u);
+}
+
+TEST_F(EngineTest, MagicSliderSmoke) {
+    Board b;
+    b.load_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 1");
+    auto moves = MoveGen::generate_legal_moves(b);
+    EXPECT_GE(moves.size(), 5u);
+}
+
+TEST_F(EngineTest, EvalBishopPairBonus) {
+    Board with_pair, without;
+    ASSERT_TRUE(with_pair.load_fen("4k3/8/8/8/8/8/8/2B1KB2 w - - 0 1"));
+    ASSERT_TRUE(without.load_fen("4k3/8/8/8/8/8/8/2N1KB2 w - - 0 1"));
+    EXPECT_GT(Evaluator::evaluate(with_pair), Evaluator::evaluate(without));
+}
+
+TEST_F(EngineTest, LongerPvFromSearch) {
+    Board b;
+    b.load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    Search search;
+    SearchLimits lim;
+    lim.use_clock = false;
+    lim.max_depth = 4;
+    SearchResult r = search.search(b, lim);
+    EXPECT_NE(r.best.data, 0u);
+    EXPECT_GE(r.pv.size(), 1u);
+    EXPECT_EQ(r.pv[0].data, r.best.data);
+}
