@@ -46,10 +46,7 @@ namespace engine {
         std::chrono::steady_clock::time_point t_end{};
         bool timed = false;
 
-        // Killer moves: 2 slots per ply
         std::array<std::array<Move, 2>, MAX_PLY> killers{};
-
-        // History heuristic: [color][from][to]
         std::array<std::array<std::array<int, 64>, 64>, 2> history{};
 
         bool time_up();
@@ -59,5 +56,6 @@ namespace engine {
         int score_move(const Board& board, const Move& move, Move tt_move, int ply);
         int quiesce(Board& board, int alpha, int beta, int ply);
         int negamax(Board& board, int depth, int alpha, int beta, int ply, bool do_null);
+        std::vector<Move> extract_pv(Board& board, Move first, int max_len);
     };
 }
