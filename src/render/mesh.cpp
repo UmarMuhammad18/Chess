@@ -8,14 +8,14 @@ namespace render {
         if (VBO) glDeleteBuffers(1, &VBO);
         if (EBO) glDeleteBuffers(1, &EBO);
     }
-    
+
     void Mesh::init_quad() {
+        // Unit square; the vertex shader scales it to a pixel rectangle
         float vertices[] = {
-            // positions        // texture coords
-             1.0f,  1.0f, 0.0f, 1.0f, 1.0f, // top right
-             1.0f, -1.0f, 0.0f, 1.0f, 0.0f, // bottom right
-            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f, // bottom left
-            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f  // top left 
+            1.0f, 1.0f, // bottom right
+            1.0f, 0.0f, // top right
+            0.0f, 0.0f, // top left
+            0.0f, 1.0f  // bottom left
         };
         unsigned int indices[] = {
             0, 1, 3, // first triangle
@@ -34,12 +34,8 @@ namespace render {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
-        // position attribute
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
         glEnableVertexAttribArray(0);
-        // texture coord attribute
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-        glEnableVertexAttribArray(1);
     }
 
     void Mesh::draw() {

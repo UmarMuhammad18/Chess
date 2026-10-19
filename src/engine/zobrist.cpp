@@ -8,6 +8,10 @@ namespace engine {
     U64 Zobrist::enpassant_keys[64];
 
     void Zobrist::init() {
+        static bool initialised = false;
+        if (initialised) return;
+        initialised = true;
+
         std::mt19937_64 rng(1070372ULL); // Fixed seed for reproducible hashes
         
         for (int p = 0; p < 6; p++) {

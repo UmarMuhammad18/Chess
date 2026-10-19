@@ -1,5 +1,7 @@
 # Build artifacts
 build/
+build-*/
+vcpkg_installed/
 out/
 .cache/
 CMakeFiles/

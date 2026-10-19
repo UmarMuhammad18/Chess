@@ -5,6 +5,10 @@
 #include <iostream>
 
 namespace render {
+    Shader::~Shader() {
+        if (program_id) glDeleteProgram(program_id);
+    }
+
     bool Shader::compile_shader(unsigned int type, const std::string& source, unsigned int& id) {
         id = glCreateShader(type);
         const char* src = source.c_str();
@@ -17,6 +21,7 @@ namespace render {
             char infoLog[512];
             glGetShaderInfoLog(id, 512, nullptr, infoLog);
             std::cerr << "ERROR::SHADER::COMPILATION_FAILED\n" << infoLog << std::endl;
+            glDeleteShader(id);
             return false;
         }
         return true;
@@ -26,7 +31,7 @@ namespace render {
         std::ifstream vShaderFile(vert_path);
         std::ifstream fShaderFile(frag_path);
         if (!vShaderFile.is_open() || !fShaderFile.is_open()) {
-            std::cerr << "Failed to open shader files!" << std::endl;
+            std::cerr << "Failed to open shader files: " << vert_path << ", " << frag_path << std::endl;
             return false;
         }
 
@@ -36,7 +41,10 @@ namespace render {
 
         unsigned int vertex, fragment;
         if (!compile_shader(GL_VERTEX_SHADER, vShaderStream.str(), vertex)) return false;
-        if (!compile_shader(GL_FRAGMENT_SHADER, fShaderStream.str(), fragment)) return false;
+        if (!compile_shader(GL_FRAGMENT_SHADER, fShaderStream.str(), fragment)) {
+            glDeleteShader(vertex);
+            return false;
+        }
 
         program_id = glCreateProgram();
         glAttachShader(program_id, vertex);
@@ -59,4 +67,16 @@ namespace render {
     void Shader::use() {
         glUseProgram(program_id);
     }
+
+    int Shader::location(const char* name) {
+        auto it = uniform_cache.find(name);
+        if (it != uniform_cache.end()) return it->second;
+        int loc = glGetUniformLocation(program_id, name);
+        uniform_cache.emplace(name, loc);
+        return loc;
+    }
+
+    void Shader::set_int(const char* name, int v) { glUniform1i(location(name), v); }
+    void Shader::set_vec2(const char* name, float x, float y) { glUniform2f(location(name), x, y); }
+    void Shader::set_vec4(const char* name, float x, float y, float z, float w) { glUniform4f(location(name), x, y, z, w); }
 }

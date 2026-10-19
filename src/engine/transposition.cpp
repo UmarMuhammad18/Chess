@@ -1,50 +1,56 @@
 #include "transposition.hpp"
+#include <algorithm>
 
 namespace engine {
     TranspositionTable::TranspositionTable(size_t mb_size) {
-        size_t num_entries = (mb_size * 1024 * 1024) / sizeof(TTEntry);
-        table.resize(num_entries);
-        clear();
+        resize(mb_size);
+    }
+
+    void TranspositionTable::resize(size_t mb_size) {
+        size_t num_entries = std::max<size_t>(1, (std::max<size_t>(1, mb_size) * 1024 * 1024) / sizeof(TTEntry));
+        table.assign(num_entries, TTEntry{});
+        generation = 0;
     }
 
     void TranspositionTable::clear() {
-        for (auto& entry : table) {
-            entry.key = 0;
-            entry.depth = -1;
-        }
+        std::fill(table.begin(), table.end(), TTEntry{});
+        generation = 0;
+    }
+
+    bool TranspositionTable::probe(U64 key, TTEntry& out) const {
+        const TTEntry& entry = table[key % table.size()];
+        if (entry.flag == HashFlag::NONE || entry.key != key) return false;
+        out = entry;
+        return true;
     }
 
     void TranspositionTable::store(U64 key, int depth, int score, HashFlag flag, Move best_move) {
-        size_t index = key % table.size();
-        // Always replace strategy for scaffolding
-        table[index].key = key;
-        table[index].depth = depth;
-        table[index].score = score;
-        table[index].flag = flag;
-        table[index].best_move = best_move;
+        TTEntry& entry = table[key % table.size()];
+
+        // Depth-preferred replacement, but always replace stale entries from
+        // earlier searches and never let a shallow result evict a deep one
+        bool same = entry.key == key;
+        if (!same && entry.flag != HashFlag::NONE && entry.generation == generation &&
+            depth < entry.depth && flag != HashFlag::EXACT) {
+            return;
+        }
+        if (same && depth < entry.depth - 2 && flag != HashFlag::EXACT) return;
+
+        // Keep the old best move if this search didn't produce one
+        if (!best_move.is_null() || !same) entry.best_move = best_move;
+        entry.key        = key;
+        entry.score      = static_cast<int16_t>(score);
+        entry.depth      = static_cast<int8_t>(std::clamp(depth, -128, 127));
+        entry.flag       = flag;
+        entry.generation = generation;
     }
 
-    bool TranspositionTable::probe(U64 key, int depth, int alpha, int beta, int& return_score, Move& best_move) {
-        size_t index = key % table.size();
-        TTEntry& entry = table[index];
-        
-        if (entry.key == key) {
-            best_move = entry.best_move;
-            if (entry.depth >= depth) {
-                if (entry.flag == HashFlag::EXACT) {
-                    return_score = entry.score;
-                    return true;
-                }
-                if (entry.flag == HashFlag::ALPHA && entry.score <= alpha) {
-                    return_score = alpha;
-                    return true;
-                }
-                if (entry.flag == HashFlag::BETA && entry.score >= beta) {
-                    return_score = beta;
-                    return true;
-                }
-            }
+    int TranspositionTable::hashfull() const {
+        size_t sample = std::min<size_t>(1000, table.size());
+        int used = 0;
+        for (size_t i = 0; i < sample; i++) {
+            if (table[i].flag != HashFlag::NONE && table[i].generation == generation) used++;
         }
-        return false;
+        return static_cast<int>(used * 1000 / sample);
     }
 }

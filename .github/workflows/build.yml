@@ -17,16 +17,41 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake libsdl2-dev libglew-dev
+          sudo apt-get install -y cmake ninja-build libsdl2-dev libglew-dev
 
       - name: Configure CMake
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: cmake --build build --config Release
+        run: cmake --build build
+
+      - name: Run Tests (including deep perft)
+        run: ctest --test-dir build --output-on-failure
+
+      - name: UCI smoke test
+        run: printf 'uci\nisready\nposition startpos moves e2e4\ngo depth 8\n' | timeout 30 ./build/chess_uci | tee uci.log && grep -q '^bestmove ' uci.log
+
+  # ─────────────────────────────────────────────
+  sanitizers:
+    name: ASan + UBSan (engine only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build
+
+      - name: Configure CMake
+        run: >
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCMAKE_CXX_COMPILER=clang++
+          -DCHESS_BUILD_GUI=OFF -DCHESS_ENABLE_SANITIZERS=ON
+
+      - name: Build
+        run: cmake --build build
 
       - name: Run Tests
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure -LE slow
 
   # ─────────────────────────────────────────────
   build-windows:
@@ -35,13 +60,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies via vcpkg
+      # vcpkg.json pins a registry baseline; make sure the runner's vcpkg clone has it
+      - name: Update vcpkg
         run: |
-          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg" install sdl2:x64-windows glew:x64-windows
-          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg" integrate install
+          git -C "$env:VCPKG_INSTALLATION_ROOT" fetch --quiet origin
+          git -C "$env:VCPKG_INSTALLATION_ROOT" checkout --quiet origin/master
+          & "$env:VCPKG_INSTALLATION_ROOT\bootstrap-vcpkg.bat" -disableMetrics
 
-      - name: Configure CMake
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+      - name: Configure CMake (vcpkg manifest mode installs SDL2 + GLEW)
+        run: cmake -B build -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows
 
       - name: Build
         run: cmake --build build --config Release
@@ -59,13 +86,13 @@ jobs:
       - name: Install dependencies
         run: |
           brew update
-          brew install cmake sdl2 glew
+          brew install cmake ninja sdl2 glew
 
       - name: Configure CMake
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: cmake --build build --config Release
+        run: cmake --build build
 
       - name: Run Tests
         run: ctest --test-dir build --output-on-failure

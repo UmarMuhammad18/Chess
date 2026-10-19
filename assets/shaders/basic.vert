@@ -1,10 +1,17 @@
 #version 330 core
-layout (location = 0) in vec3 aPos;
-layout (location = 1) in vec2 aTexCoord;
+// Unit quad (0..1) placed at a pixel-space rectangle; origin is the top-left of the window
+layout (location = 0) in vec2 aPos;
 
-out vec2 TexCoord;
+uniform vec2 uScreen;   // framebuffer size in pixels
+uniform vec4 uRect;     // x, y, width, height in pixels
+uniform vec4 uUV;       // u0, v0, u1, v1 (texture space, v down)
+
+out vec2 vLocal;
+out vec2 vUV;
 
 void main() {
-    gl_Position = vec4(aPos, 1.0);
-    TexCoord = aTexCoord;
+    vec2 px = uRect.xy + aPos * uRect.zw;
+    gl_Position = vec4(px.x / uScreen.x * 2.0 - 1.0, 1.0 - px.y / uScreen.y * 2.0, 0.0, 1.0);
+    vLocal = aPos;
+    vUV = mix(uUV.xy, uUV.zw, aPos);
 }

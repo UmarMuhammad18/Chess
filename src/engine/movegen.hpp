@@ -1,25 +1,28 @@
 #pragma once
 #include "board.hpp"
-#include <vector>
 
 namespace engine {
     class MoveGen {
     public:
+        // Initialises attack tables (idempotent)
         static void init();
+
         static bool is_square_attacked(const Board& board, Square sq, Color by_color);
-        static std::vector<Move> generate_pseudo_legal_moves(const Board& board);
-        static std::vector<Move> generate_legal_moves(Board& board);
+        // True if the king of color c is currently attacked
+        static bool is_king_attacked(const Board& board, Color c);
+        // True if the side to move is in check
+        static bool in_check(const Board& board) { return is_king_attacked(board, board.get_side_to_move()); }
+
+        static void generate_pseudo_legal_moves(const Board& board, MoveList& moves);
+        // Captures, en passant and queen promotions only (for quiescence search)
+        static void generate_captures(const Board& board, MoveList& moves);
+        static MoveList generate_legal_moves(Board& board);
+
     private:
-        static U64 knight_attacks[64];
-        static U64 king_attacks[64];
-        static U64 pawn_attacks[2][64];
-
-        // Classical ray attack (retained as reference, can be replaced with Magics)
-        static U64 get_ray_attacks(Square sq, U64 occupancy, int dir_index);
-        static U64 rook_attacks_otf(Square sq, U64 occ);
-        static U64 bishop_attacks_otf(Square sq, U64 occ);
-
-        static void gen_pawn_moves(const Board& board, std::vector<Move>& moves, Color us);
-        static void gen_castling_moves(const Board& board, std::vector<Move>& moves, Color us);
+        template <bool CapturesOnly>
+        static void generate(const Board& board, MoveList& moves);
+        template <bool CapturesOnly>
+        static void gen_pawn_moves(const Board& board, MoveList& moves, Color us);
+        static void gen_castling_moves(const Board& board, MoveList& moves, Color us);
     };
 }

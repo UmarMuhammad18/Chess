@@ -7,6 +7,8 @@ namespace engine {
     enum class Color { WHITE, BLACK, BOTH };
     enum class Piece { PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, NONE };
 
+    constexpr Color opposite(Color c) { return c == Color::WHITE ? Color::BLACK : Color::WHITE; }
+
     enum class Square : int {
         A1, B1, C1, D1, E1, F1, G1, H1,
         A2, B2, C2, D2, E2, F2, G2, H2,
@@ -23,6 +25,13 @@ namespace engine {
     enum class Rank { Rank1, Rank2, Rank3, Rank4, Rank5, Rank6, Rank7, Rank8 };
 
     enum Castling { WK = 1, WQ = 2, BK = 4, BQ = 8 };
+
+    // Search limits and score scale (centipawns)
+    constexpr int MAX_PLY    = 128;
+    constexpr int MAX_MOVES  = 256;
+    constexpr int INF_SCORE  = 32000;
+    constexpr int MATE_SCORE = 31000;
+    constexpr int MATE_BOUND = MATE_SCORE - MAX_PLY; // |score| >= this means "mate found"
 
     // 16-bit Move layout:
     // bits  0-5 : from square
@@ -61,26 +70,36 @@ namespace engine {
         Square   get_to()   const { return static_cast<Square>((data >> 6)  & 0x3F); }
         MoveFlag get_flag() const { return static_cast<MoveFlag>((data >> 12) & 0x0F); }
 
-        bool is_capture()   const {
-            auto f = get_flag();
-            return f == MoveFlag::Capture    || f == MoveFlag::EnPassant      ||
-                   f == MoveFlag::PromoKnightCap || f == MoveFlag::PromoBishopCap ||
-                   f == MoveFlag::PromoRookCap   || f == MoveFlag::PromoQueenCap;
-        }
-        bool is_promotion() const {
-            auto f = get_flag();
-            return f == MoveFlag::PromoKnight || f == MoveFlag::PromoBishop ||
-                   f == MoveFlag::PromoRook   || f == MoveFlag::PromoQueen  ||
-                   f == MoveFlag::PromoKnightCap || f == MoveFlag::PromoBishopCap ||
-                   f == MoveFlag::PromoRookCap   || f == MoveFlag::PromoQueenCap;
-        }
+        bool is_null() const { return data == 0; }
+        bool operator==(const Move& o) const { return data == o.data; }
+        bool operator!=(const Move& o) const { return data != o.data; }
+
+        // Flags 4-5 and 12-15 have bit 2 set: Capture, EnPassant and the promo-captures
+        bool is_capture()   const { return (static_cast<int>(get_flag()) & 4) != 0; }
+        bool is_promotion() const { return (static_cast<int>(get_flag()) & 8) != 0; }
+        bool is_castle()    const { return get_flag() == MoveFlag::KingCastle || get_flag() == MoveFlag::QueenCastle; }
         Piece promo_piece() const {
-            auto f = get_flag();
-            if (f == MoveFlag::PromoKnight || f == MoveFlag::PromoKnightCap) return Piece::KNIGHT;
-            if (f == MoveFlag::PromoBishop || f == MoveFlag::PromoBishopCap) return Piece::BISHOP;
-            if (f == MoveFlag::PromoRook   || f == MoveFlag::PromoRookCap)   return Piece::ROOK;
-            if (f == MoveFlag::PromoQueen  || f == MoveFlag::PromoQueenCap)  return Piece::QUEEN;
-            return Piece::NONE;
+            if (!is_promotion()) return Piece::NONE;
+            // Low two bits of the flag select N, B, R, Q
+            return static_cast<Piece>(static_cast<int>(Piece::KNIGHT) + (static_cast<int>(get_flag()) & 3));
         }
+    };
+
+    // Fixed-capacity move container; avoids heap allocation in move generation
+    struct MoveList {
+        Move moves[MAX_MOVES];
+        int  count{0};
+
+        void push_back(Move m) { moves[count++] = m; }
+        int  size()  const { return count; }
+        bool empty() const { return count == 0; }
+        void clear() { count = 0; }
+
+        Move&       operator[](int i)       { return moves[i]; }
+        const Move& operator[](int i) const { return moves[i]; }
+        Move*       begin()       { return moves; }
+        Move*       end()         { return moves + count; }
+        const Move* begin() const { return moves; }
+        const Move* end()   const { return moves + count; }
     };
 }
