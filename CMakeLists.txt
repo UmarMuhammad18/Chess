@@ -5,6 +5,14 @@ option(CHESS_BUILD_GUI          "Build the SDL2/OpenGL desktop GUI"             
 option(CHESS_BUILD_TESTS        "Build the GoogleTest suite"                     ON)
 option(CHESS_ENABLE_SANITIZERS  "Build with AddressSanitizer + UBSan (GCC/Clang)" OFF)
 option(CHESS_WARNINGS_AS_ERRORS "Treat compiler warnings as errors"              OFF)
+option(CHESS_ANDROID            "Engine + UCI only, for Android NDK toolchains"  OFF)
+option(CHESS_IOS                "Engine + C API static library for Xcode"        OFF)
+
+# Mobile builds have no SDL desktop GUI; see android/README.md and ios/README.md
+if(CHESS_ANDROID OR CHESS_IOS)
+    set(CHESS_BUILD_GUI OFF CACHE BOOL "" FORCE)
+    set(CHESS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -51,10 +59,12 @@ add_library(chess_core STATIC
     src/engine/transposition.cpp
     src/engine/zobrist.cpp
     src/uci/uci.cpp
+    src/bridge/chess_c_api.cpp
 )
-target_include_directories(chess_core PUBLIC src)
+target_include_directories(chess_core PUBLIC src src/bridge)
 target_compile_features(chess_core PUBLIC cxx_std_20)
 target_link_libraries(chess_core PUBLIC chess_options Threads::Threads)
+set_target_properties(chess_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # ── UCI engine binary (for Arena, Cute Chess, lichess-bot, ...) ──
 add_executable(chess_uci src/uci_main.cpp)
@@ -121,7 +131,7 @@ if(CHESS_BUILD_TESTS)
     FetchContent_MakeAvailable(googletest)
 
     enable_testing()
-    add_executable(engine_test test/engine_test.cpp test/search_test.cpp test/uci_test.cpp)
+    add_executable(engine_test test/engine_test.cpp test/search_test.cpp test/uci_test.cpp test/bridge_test.cpp)
     target_link_libraries(engine_test PRIVATE chess_core GTest::gtest_main)
 
     # Fast suite runs on every build; deep perft is labelled "slow" (ctest -LE slow to skip)

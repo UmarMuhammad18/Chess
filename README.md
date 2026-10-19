@@ -23,7 +23,7 @@ CMake targets:
 
 | Target | Contents |
 |---|---|
-| `chess_core` | Static library: engine + UCI handler. Linked by everything else |
+| `chess_core` | Static library: engine + UCI handler + C API for mobile. Linked by everything else |
 | `chess_uci` | Console UCI engine for Arena, Cute Chess, BanksiaGUI, lichess-bot |
 | `chess_engine` | Desktop GUI (optional, `-DCHESS_BUILD_GUI=OFF` to skip) |
 | `engine_test` | GoogleTest suite (perft, rules, search, UCI) |
@@ -167,6 +167,19 @@ bestmove g1f3
 Supported: `uci`, `isready`, `ucinewgame`, `setoption name Hash value N`, `position [startpos | fen …] [moves …]`, `go [depth | movetime | wtime/btime/winc/binc/movestogo | nodes | infinite | perft N]`, `stop`, `quit`, plus `d` (print FEN) and `perft N` for debugging.
 
 To measure strength changes, run engine-vs-engine matches with [cutechess-cli](https://github.com/cutechess/cutechess) and SPRT rather than judging by eye.
+
+---
+
+## Mobile (Android / iOS)
+
+The engine is exposed through a small C API (`src/bridge/chess_c_api.h`) built into `chess_core`, with a Swift wrapper in `ios/ChessBridge/`.
+
+```bash
+cmake -B build-ios -DCHESS_IOS=ON          # libchess_core + chess_uci, no GUI
+cmake -B build-android -DCHESS_ANDROID=ON   -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a
+```
+
+See [android/README.md](android/README.md) and [ios/README.md](ios/README.md) for status and next steps.
 
 ---
 
